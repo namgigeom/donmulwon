@@ -63,50 +63,36 @@ client = genai.Client(
 # ============================================================
 
 def safe_value(value, default="정보 없음"):
-
     if value is None:
         return default
-
     try:
-
         if pd.isna(value):
             return default
-
     except Exception:
         pass
-
     return value
 
 
 def format_number(value):
-
     if value == "정보 없음":
         return value
-
     try:
         return f"{float(value):,.2f}"
-
     except Exception:
         return str(value)
 
 
 def load_memory():
-
     if not os.path.exists(MEMORY_FILE):
         return {}
-
     try:
-
         with open(
             MEMORY_FILE,
             "r",
             encoding="utf-8"
         ) as f:
-
             return json.load(f)
-
     except Exception:
-
         return {}
 
 
@@ -114,7 +100,6 @@ def save_analysis_history(
     ticker,
     result
 ):
-
     os.makedirs(
         ANALYSIS_HISTORY_DIR,
         exist_ok=True
@@ -124,8 +109,11 @@ def save_analysis_history(
         "%Y%m%d_%H%M%S"
     )
 
+    # ticker 안전 처리
+    safe_ticker = ticker if ticker else "MARKET"
+
     filename = (
-        f"crow_{ticker}_{timestamp}.md"
+        f"crow_{safe_ticker}_{timestamp}.md"
     )
 
     path = os.path.join(
@@ -138,7 +126,6 @@ def save_analysis_history(
         "w",
         encoding="utf-8"
     ) as f:
-
         f.write(result)
 
     return path
@@ -149,219 +136,63 @@ def save_analysis_history(
 # ============================================================
 
 def get_company_data(ticker):
-
     print()
     print(
         f"📡 {ticker} 기업 데이터를 가져오는 중..."
     )
 
+    # 전체 계좌/시장 분석 시 예외 처리
+    if ticker in ["MARKET", "PORTFOLIO", "ALL"]:
+        return {"ticker": ticker, "note": "전체 포트폴리오 분석으로 개별 기업 수집 건너뜀"}
+
     stock = yf.Ticker(ticker)
 
     try:
-
         info = stock.info
-
     except Exception:
-
         info = {}
 
-
-    # --------------------------------------------------------
-    # 현재 가격
-    # --------------------------------------------------------
-
-    current_price = safe_value(
-        info.get("currentPrice")
-    )
-
-    previous_close = safe_value(
-        info.get("previousClose")
-    )
-
-    market_cap = safe_value(
-        info.get("marketCap")
-    )
-
-    enterprise_value = safe_value(
-        info.get("enterpriseValue")
-    )
-
-
-    # --------------------------------------------------------
-    # 기업 기본정보
-    # --------------------------------------------------------
+    current_price = safe_value(info.get("currentPrice"))
+    previous_close = safe_value(info.get("previousClose"))
+    market_cap = safe_value(info.get("marketCap"))
+    enterprise_value = safe_value(info.get("enterpriseValue"))
 
     company_data = {
-
         "ticker": ticker,
-
-        "company_name": safe_value(
-            info.get("longName")
-        ),
-
-        "sector": safe_value(
-            info.get("sector")
-        ),
-
-        "industry": safe_value(
-            info.get("industry")
-        ),
-
-        "country": safe_value(
-            info.get("country")
-        ),
-
-        "website": safe_value(
-            info.get("website")
-        ),
-
-        "description": safe_value(
-            info.get("longBusinessSummary")
-        ),
-
-
-        # ----------------------------------------------------
-        # 가격
-        # ----------------------------------------------------
-
+        "company_name": safe_value(info.get("longName")),
+        "sector": safe_value(info.get("sector")),
+        "industry": safe_value(info.get("industry")),
+        "country": safe_value(info.get("country")),
+        "website": safe_value(info.get("website")),
+        "description": safe_value(info.get("longBusinessSummary")),
         "current_price": current_price,
-
         "previous_close": previous_close,
-
-
-        # ----------------------------------------------------
-        # 기업 규모
-        # ----------------------------------------------------
-
         "market_cap": market_cap,
-
         "enterprise_value": enterprise_value,
-
-
-        # ----------------------------------------------------
-        # 성장성
-        # ----------------------------------------------------
-
-        "revenue_growth": safe_value(
-            info.get("revenueGrowth")
-        ),
-
-        "earnings_growth": safe_value(
-            info.get("earningsGrowth")
-        ),
-
-        "earnings_quarterly_growth": safe_value(
-            info.get("earningsQuarterlyGrowth")
-        ),
-
-
-        # ----------------------------------------------------
-        # 수익성
-        # ----------------------------------------------------
-
-        "profit_margin": safe_value(
-            info.get("profitMargins")
-        ),
-
-        "operating_margin": safe_value(
-            info.get("operatingMargins")
-        ),
-
-        "gross_margin": safe_value(
-            info.get("grossMargins")
-        ),
-
-        "return_on_equity": safe_value(
-            info.get("returnOnEquity")
-        ),
-
-        "return_on_assets": safe_value(
-            info.get("returnOnAssets")
-        ),
-
-
-        # ----------------------------------------------------
-        # 재무 안정성
-        # ----------------------------------------------------
-
-        "total_cash": safe_value(
-            info.get("totalCash")
-        ),
-
-        "total_debt": safe_value(
-            info.get("totalDebt")
-        ),
-
-        "debt_to_equity": safe_value(
-            info.get("debtToEquity")
-        ),
-
-        "current_ratio": safe_value(
-            info.get("currentRatio")
-        ),
-
-
-        # ----------------------------------------------------
-        # 밸류에이션
-        # ----------------------------------------------------
-
-        "trailing_pe": safe_value(
-            info.get("trailingPE")
-        ),
-
-        "forward_pe": safe_value(
-            info.get("forwardPE")
-        ),
-
-        "peg_ratio": safe_value(
-            info.get("pegRatio")
-        ),
-
-        "price_to_sales": safe_value(
-            info.get("priceToSalesTrailing12Months")
-        ),
-
-        "price_to_book": safe_value(
-            info.get("priceToBook")
-        ),
-
-
-        # ----------------------------------------------------
-        # 배당
-        # ----------------------------------------------------
-
-        "dividend_yield": safe_value(
-            info.get("dividendYield")
-        ),
-
-        "dividend_rate": safe_value(
-            info.get("dividendRate")
-        ),
-
-
-        # ----------------------------------------------------
-        # 애널리스트 정보
-        # ----------------------------------------------------
-
-        "target_mean_price": safe_value(
-            info.get("targetMeanPrice")
-        ),
-
-        "target_high_price": safe_value(
-            info.get("targetHighPrice")
-        ),
-
-        "target_low_price": safe_value(
-            info.get("targetLowPrice")
-        ),
-
-        "recommendation": safe_value(
-            info.get("recommendationKey")
-        ),
-
-        "analyst_count": safe_value(
-            info.get("numberOfAnalystOpinions")
-        )
+        "revenue_growth": safe_value(info.get("revenueGrowth")),
+        "earnings_growth": safe_value(info.get("earningsGrowth")),
+        "earnings_quarterly_growth": safe_value(info.get("earningsQuarterlyGrowth")),
+        "profit_margin": safe_value(info.get("profitMargins")),
+        "operating_margin": safe_value(info.get("operatingMargins")),
+        "gross_margin": safe_value(info.get("grossMargins")),
+        "return_on_equity": safe_value(info.get("returnOnEquity")),
+        "return_on_assets": safe_value(info.get("returnOnAssets")),
+        "total_cash": safe_value(info.get("totalCash")),
+        "total_debt": safe_value(info.get("totalDebt")),
+        "debt_to_equity": safe_value(info.get("debtToEquity")),
+        "current_ratio": safe_value(info.get("currentRatio")),
+        "trailing_pe": safe_value(info.get("trailingPE")),
+        "forward_pe": safe_value(info.get("forwardPE")),
+        "peg_ratio": safe_value(info.get("pegRatio")),
+        "price_to_sales": safe_value(info.get("priceToSalesTrailing12Months")),
+        "price_to_book": safe_value(info.get("priceToBook")),
+        "dividend_yield": safe_value(info.get("dividendYield")),
+        "dividend_rate": safe_value(info.get("dividendRate")),
+        "target_mean_price": safe_value(info.get("targetMeanPrice")),
+        "target_high_price": safe_value(info.get("targetHighPrice")),
+        "target_low_price": safe_value(info.get("targetLowPrice")),
+        "recommendation": safe_value(info.get("recommendationKey")),
+        "analyst_count": safe_value(info.get("numberOfAnalystOpinions"))
     }
 
     return company_data
@@ -372,70 +203,38 @@ def get_company_data(ticker):
 # ============================================================
 
 def get_news(ticker):
-
     print(
         f"📰 {ticker} 최근 뉴스 수집 중..."
     )
 
+    if ticker in ["MARKET", "PORTFOLIO", "ALL"]:
+        ticker = "^GSPC"  # 전체 시장 분석 시 S&P500 지수 뉴스를 가져옴
+
     stock = yf.Ticker(ticker)
 
     try:
-
         news = stock.news
-
     except Exception:
-
         news = []
-
 
     news_data = []
 
     for item in news[:15]:
-
         try:
-
-            content = item.get(
-                "content",
-                {}
-            )
-
-            title = content.get(
-                "title"
-            )
-
-            publisher = content.get(
-                "provider",
-                {}
-            ).get(
-                "displayName"
-            )
-
-            link = content.get(
-                "canonicalUrl",
-                {}
-            ).get(
-                "url"
-            )
-
-            pub_date = content.get(
-                "pubDate"
-            )
+            content = item.get("content", {})
+            title = content.get("title")
+            publisher = content.get("provider", {}).get("displayName")
+            link = content.get("canonicalUrl", {}).get("url")
+            pub_date = content.get("pubDate")
 
             if title:
-
                 news_data.append({
-
                     "title": title,
-
                     "publisher": publisher,
-
                     "date": pub_date,
-
                     "url": link
                 })
-
         except Exception:
-
             continue
 
     return news_data
@@ -446,100 +245,39 @@ def get_news(ticker):
 # ============================================================
 
 def get_financials(ticker):
-
     print(
         f"💰 {ticker} 재무 데이터를 확인하는 중..."
     )
 
-    stock = yf.Ticker(ticker)
+    if ticker in ["MARKET", "PORTFOLIO", "ALL"]:
+        return {}
 
+    stock = yf.Ticker(ticker)
     financial_data = {}
 
-
-    # --------------------------------------------------------
-    # 손익계산서
-    # --------------------------------------------------------
-
     try:
-
         income = stock.income_stmt
-
         if income is not None and not income.empty:
-
             latest_column = income.columns[0]
-
-            financial_data[
-                "latest_income_statement"
-            ] = {}
-
-            for row in [
-                "Total Revenue",
-                "Operating Income",
-                "Net Income",
-                "Gross Profit"
-            ]:
-
+            financial_data["latest_income_statement"] = {}
+            for row in ["Total Revenue", "Operating Income", "Net Income", "Gross Profit"]:
                 if row in income.index:
-
-                    value = income.loc[
-                        row,
-                        latest_column
-                    ]
-
-                    financial_data[
-                        "latest_income_statement"
-                    ][row] = safe_value(
-                        value
-                    )
-
+                    value = income.loc[row, latest_column]
+                    financial_data["latest_income_statement"][row] = safe_value(value)
     except Exception:
-
-        financial_data[
-            "latest_income_statement"
-        ] = {}
-
-
-    # --------------------------------------------------------
-    # 현금흐름
-    # --------------------------------------------------------
+        financial_data["latest_income_statement"] = {}
 
     try:
-
         cashflow = stock.cashflow
-
         if cashflow is not None and not cashflow.empty:
-
             latest_column = cashflow.columns[0]
-
-            financial_data[
-                "latest_cashflow"
-            ] = {}
-
-            for row in [
-                "Operating Cash Flow",
-                "Free Cash Flow",
-                "Capital Expenditure"
-            ]:
-
+            financial_data["latest_cashflow"] = {}
+            for row in ["Operating Cash Flow", "Free Cash Flow", "Capital Expenditure"]:
                 if row in cashflow.index:
-
-                    value = cashflow.loc[
-                        row,
-                        latest_column
-                    ]
-
-                    financial_data[
-                        "latest_cashflow"
-                    ][row] = safe_value(
-                        value
-                    )
-
+                    value = cashflow.loc[row, latest_column]
+                    financial_data["latest_cashflow"][row] = safe_value(value)
     except Exception:
-
-        financial_data[
-            "latest_cashflow"
-        ] = {}
-
+        financial_data["latest_cashflow"] = {}
 
     return financial_data
 
@@ -549,31 +287,21 @@ def get_financials(ticker):
 # ============================================================
 
 def collect_data(ticker):
+    # ✅ 안전장치: ticker가 None일 때 분기 처리
+    if not ticker or str(ticker).strip().upper() in ["NONE", "ALL", "PORTFOLIO"]:
+        ticker = "MARKET"
+    else:
+        ticker = str(ticker).upper().strip()
 
-    ticker = ticker.upper().strip()
-
-    company = get_company_data(
-        ticker
-    )
-
-    news = get_news(
-        ticker
-    )
-
-    financials = get_financials(
-        ticker
-    )
-
+    company = get_company_data(ticker)
+    news = get_news(ticker)
+    financials = get_financials(ticker)
     memory = load_memory()
 
     return {
-
         "company": company,
-
         "news": news,
-
         "financials": financials,
-
         "memory": memory
     }
 
@@ -583,36 +311,27 @@ def collect_data(ticker):
 # ============================================================
 
 def analyze_stock(
-    ticker,
+    ticker=None,
     portfolio_context=None
 ):
 
-    ticker = ticker.upper().strip()
+    # ✅ 안전장치: None 체크
+    if not ticker or str(ticker).strip().upper() in ["NONE", "ALL", "PORTFOLIO"]:
+        target_ticker = "MARKET"
+    else:
+        target_ticker = str(ticker).upper().strip()
 
-    data = collect_data(
-        ticker
-    )
-
-
-    # --------------------------------------------------------
-    # 포트폴리오 정보
-    # --------------------------------------------------------
+    data = collect_data(target_ticker)
 
     if portfolio_context is None:
-
         portfolio_context = {
             "holding": False
         }
 
-
     analysis_data = {
-
         "stock_data": data,
-
-        "portfolio_context":
-            portfolio_context
+        "portfolio_context": portfolio_context
     }
-
 
     data_text = json.dumps(
         analysis_data,
@@ -621,11 +340,7 @@ def analyze_stock(
         default=str
     )
 
-
-    # ========================================================
-    # 🐦 김선달 프롬프트
-    # ========================================================
-
+    # 프롬프트는 기존과 동일하게 유지
     prompt = f"""
 너는 사용자의 개인 투자 분석팀에 소속된
 펀더멘털 + 뉴스/정보 분석 AI
@@ -1110,19 +825,14 @@ def analyze_stock(
 {data_text}
 """
 
-
-    # ========================================================
-    # 실행
-    # ========================================================
-
     print()
     print("=" * 70)
-    print("                 🐦 김선달 AI")
+    print("                🐦 김선달 AI")
     print("=" * 70)
     print()
 
     print(
-        f"📡 {ticker} 펀더멘털 + 뉴스 데이터를 분석하는 중..."
+        f"📡 {target_ticker} 펀더멘털 + 뉴스 데이터를 분석하는 중..."
     )
 
     print()
@@ -1134,13 +844,8 @@ def analyze_stock(
 
     result = response.text
 
-
-    # ========================================================
-    # 저장
-    # ========================================================
-
     history_path = save_analysis_history(
-        ticker,
+        target_ticker,
         result
     )
 
@@ -1163,32 +868,22 @@ if __name__ == "__main__":
 
     print()
     print("=" * 70)
-    print("                 🐦 김선달 펀더멘털 AI")
+    print("                🐦 김선달 펀더멘털 AI")
     print("=" * 70)
     print()
 
-    ticker = input(
-        "분석할 미국 주식 티커를 입력하세요: "
-    ).strip().upper()
-
-    if not ticker:
-
-        print(
-            "❌ 티커가 입력되지 않았습니다."
-        )
-
-        exit()
-
+    ticker_input = input(
+        "분석할 미국 주식 티커를 입력하세요 (엔터 시 전체 분석): "
+    ).strip()
 
     try:
-
         result = analyze_stock(
-            ticker
+            ticker_input
         )
 
         print()
         print("=" * 70)
-        print("                 🐦 김선달 분석")
+        print("                🐦 김선달 분석")
         print("=" * 70)
         print()
 
@@ -1196,7 +891,7 @@ if __name__ == "__main__":
 
         print()
         print("=" * 70)
-        print("                 분석 완료")
+        print("                분석 완료")
         print("=" * 70)
 
     except Exception as e:

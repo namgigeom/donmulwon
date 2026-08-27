@@ -137,8 +137,11 @@ def save_analysis_history(
         "%Y%m%d_%H%M%S"
     )
 
+    # ✅ ticker 예외 처리 (None 또는 빈 문자열 대비)
+    safe_ticker = ticker if ticker else "PORTFOLIO"
+
     filename = (
-        f"raccoon_{ticker}_{timestamp}.md"
+        f"raccoon_{safe_ticker}_{timestamp}.md"
     )
 
     path = os.path.join(
@@ -159,10 +162,6 @@ def save_analysis_history(
 
 # ============================================================
 # 시장 데이터
-#
-# ※ 너부리의 주 분석 대상은 계좌/포트폴리오다.
-# ※ 시장 데이터는 포트폴리오 위험을 판단하기 위한
-#    보조 정보로만 사용한다.
 # ============================================================
 
 def get_market_context():
@@ -244,17 +243,13 @@ def get_market_context():
 
 # ============================================================
 # 특정 종목 가격 정보
-#
-# ※ 종목 자체의 기술적 분석은 이묵의 영역이다.
-# ※ 너부리는 계좌 내 위치를 판단하기 위한
-#    최소한의 가격 정보만 참고한다.
 # ============================================================
 
 def get_stock_data(
     ticker
 ):
 
-    if not ticker:
+    if not ticker or ticker.upper() in ["PORTFOLIO", "ALL", "NONE"]:
         return {}
 
     try:
@@ -343,11 +338,6 @@ def get_stock_data(
 
 # ============================================================
 # 계좌 데이터 정리
-#
-# main.py에서 토스 API 결과를 전달받는다.
-#
-# 여기서는 데이터를 새로 만들지 않고
-# 분석하기 편한 형태로 정리만 한다.
 # ============================================================
 
 def analyze_portfolio(
@@ -389,7 +379,7 @@ def find_holding(
     ticker
 ):
 
-    if not portfolio_context:
+    if not portfolio_context or not ticker or str(ticker).upper() in ["PORTFOLIO", "ALL", "NONE"]:
         return None
 
     items = (
@@ -403,7 +393,7 @@ def find_holding(
 
         if str(
             item.get("symbol", "")
-        ).upper() == ticker.upper():
+        ).upper() == str(ticker).upper():
 
             return item
 
@@ -415,28 +405,29 @@ def find_holding(
 # ============================================================
 
 def analyze_stock(
-    ticker,
+    ticker=None,
     portfolio_context=None
 ):
 
-    ticker = ticker.upper().strip()
+    # ✅ 안전장치: ticker가 None이거나 전체 분석 키워드일 경우 'PORTFOLIO'로 기본값 지정
+    if not ticker or str(ticker).strip().upper() in ["NONE", "ALL", "PORTFOLIO"]:
+        target_ticker = "PORTFOLIO"
+    else:
+        target_ticker = str(ticker).upper().strip()
 
     print()
     print("=" * 70)
-    print("                 🦝 너부리 AI")
+    print("                🦝 너부리 AI")
     print("=" * 70)
     print()
 
     print(
-        f"💰 {ticker} 계좌 및 포트폴리오 상황을 확인하는 중..."
+        f"💰 {target_ticker} 계좌 및 포트폴리오 상황을 확인하는 중..."
     )
 
 
     # ========================================================
     # 계좌 데이터
-    #
-    # 가장 중요
-    # main.py에서 전달받은 현재 계좌 데이터를 사용한다.
     # ========================================================
 
     if portfolio_context is None:
@@ -459,7 +450,7 @@ def analyze_stock(
 
     holding = find_holding(
         portfolio_context,
-        ticker
+        target_ticker
     )
 
 
@@ -483,7 +474,7 @@ def analyze_stock(
     )
 
     stock = get_stock_data(
-        ticker
+        target_ticker
     )
 
 
@@ -501,7 +492,7 @@ def analyze_stock(
     analysis_data = {
 
         "requested_ticker":
-            ticker,
+            target_ticker,
 
         "requested_holding":
             holding,
@@ -530,7 +521,7 @@ def analyze_stock(
 
 
     # ========================================================
-    # 🦝 너부리 프롬프트
+    # 🦝 너부리 프롬프트 (기존 프롬프트 내용 유지)
     # ========================================================
 
     prompt = f"""
@@ -1245,7 +1236,7 @@ USD cashBuyingPower가 0이라면
     # ========================================================
 
     history_path = save_analysis_history(
-        ticker,
+        target_ticker,
         result
     )
 
@@ -1262,9 +1253,6 @@ USD cashBuyingPower가 0이라면
 
 # ============================================================
 # 단독 테스트 실행
-#
-# ※ 실제 메인 시스템에서는 main.py가
-#    portfolio_context를 전달해야 한다.
 # ============================================================
 
 if __name__ == "__main__":
@@ -1273,22 +1261,13 @@ if __name__ == "__main__":
 
         print()
         print("=" * 70)
-        print("                 🦝 너부리 포트폴리오 AI")
+        print("                🦝 너부리 포트폴리오 AI")
         print("=" * 70)
         print()
 
         ticker = input(
-            "분석할 티커를 입력하세요: "
+            "분석할 티커를 입력하세요 (엔터 시 전체 계좌 분석): "
         ).strip().upper()
-
-        if not ticker:
-
-            print(
-                "❌ 티커가 입력되지 않았습니다."
-            )
-
-            exit()
-
 
         print()
         print(
@@ -1318,7 +1297,7 @@ if __name__ == "__main__":
 
         print()
         print("=" * 70)
-        print("                 🦝 너부리 분석")
+        print("                🦝 너부리 분석")
         print("=" * 70)
         print()
 
@@ -1326,7 +1305,7 @@ if __name__ == "__main__":
 
         print()
         print("=" * 70)
-        print("                 분석 완료")
+        print("                분석 완료")
         print("=" * 70)
 
 

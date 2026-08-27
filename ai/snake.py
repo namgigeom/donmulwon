@@ -1,5 +1,6 @@
-import os
+
 import json
+import os
 from datetime import datetime
 
 import pandas as pd
@@ -12,31 +13,15 @@ from google import genai
 # 🐍 이묵 TECHNICAL AI
 # ============================================================
 
-BASE_DIR = os.path.dirname(
-    os.path.dirname(
-        os.path.abspath(__file__)
-    )
-)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-ENV_FILE = os.path.join(
-    BASE_DIR,
-    ".env"
-)
+ENV_FILE = os.path.join(BASE_DIR, ".env")
 
-AI_DIR = os.path.join(
-    BASE_DIR,
-    "ai"
-)
+AI_DIR = os.path.join(BASE_DIR, "ai")
 
-ANALYSIS_HISTORY_DIR = os.path.join(
-    AI_DIR,
-    "analysis_history"
-)
+ANALYSIS_HISTORY_DIR = os.path.join(AI_DIR, "analysis_history")
 
-MEMORY_FILE = os.path.join(
-    AI_DIR,
-    "memory.json"
-)
+MEMORY_FILE = os.path.join(AI_DIR, "memory.json")
 
 
 # ============================================================
@@ -48,13 +33,9 @@ load_dotenv(ENV_FILE)
 api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
-    raise Exception(
-        "GEMINI_API_KEY가 없습니다."
-    )
+    raise Exception("GEMINI_API_KEY가 없습니다.")
 
-client = genai.Client(
-    api_key=api_key
-)
+client = genai.Client(api_key=api_key)
 
 
 # ============================================================
@@ -84,13 +65,7 @@ def load_memory():
         return {}
 
     try:
-
-        with open(
-            MEMORY_FILE,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
+        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
 
     except Exception:
@@ -98,35 +73,16 @@ def load_memory():
         return {}
 
 
-def save_analysis_history(
-    ticker,
-    result
-):
+def save_analysis_history(ticker, result):
+    os.makedirs(ANALYSIS_HISTORY_DIR, exist_ok=True)
 
-    os.makedirs(
-        ANALYSIS_HISTORY_DIR,
-        exist_ok=True
-    )
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    timestamp = datetime.now().strftime(
-        "%Y%m%d_%H%M%S"
-    )
+    filename = f"snake_{ticker}_{timestamp}.md"
 
-    filename = (
-        f"snake_{ticker}_{timestamp}.md"
-    )
+    path = os.path.join(ANALYSIS_HISTORY_DIR, filename)
 
-    path = os.path.join(
-        ANALYSIS_HISTORY_DIR,
-        filename
-    )
-
-    with open(
-        path,
-        "w",
-        encoding="utf-8"
-    ) as f:
-
+    with open(path, "w", encoding="utf-8") as f:
         f.write(result)
 
     return path
@@ -136,12 +92,11 @@ def save_analysis_history(
 # 기술적 데이터 수집
 # ============================================================
 
+
 def get_market_data(ticker):
 
     print()
-    print(
-        f"📊 {ticker} 기술적 데이터를 분석하는 중..."
-    )
+    print(f"📊 {ticker} 기술적 데이터를 분석하는 중...")
 
     try:
 
@@ -150,36 +105,23 @@ def get_market_data(ticker):
             period="1y",
             interval="1d",
             auto_adjust=False,
-            progress=False
+            progress=False,
         )
 
     except Exception as e:
-
-        return {
-            "error": str(e)
-        }
-
+        return {"error": str(e)}
 
     if data.empty:
+        return {"error": f"주가 데이터를 찾을 수 없습니다. (입력된 티커: {ticker})"}
 
-        return {
-            "error": "주가 데이터를 찾을 수 없습니다."
-        }
-
-
-    # --------------------------------------------------------
-    # MultiIndex 대응
-    # --------------------------------------------------------
+    # MultiIndex 대응 (yfinance 최신 버전 구조 정리)
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.get_level_values(0)
 
     def get_series(column):
 
         value = data[column]
-
-        if isinstance(
-            value,
-            pd.DataFrame
-        ):
-
+        if isinstance(value, pd.DataFrame):
             value = value.iloc[:, 0]
 
         return value
@@ -194,224 +136,90 @@ def get_market_data(ticker):
     # ========================================================
     # 이동평균
     # ========================================================
-
+    
     ma20 = close.rolling(20).mean()
     ma50 = close.rolling(50).mean()
     ma200 = close.rolling(200).mean()
 
 
     # ========================================================
-    # RSI
+    # RSI (Wilder's Smoothing 적용)
     # ========================================================
-
+    
     delta = close.diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
 
-    gain = delta.where(
-        delta > 0,
-        0
-    )
-
-    loss = -delta.where(
-        delta < 0,
-        0
-    )
-
-    avg_gain = gain.rolling(14).mean()
-    avg_loss = loss.rolling(14).mean()
+    avg_gain = gain.ewm(alpha=1 / 14, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / 14, adjust=False).mean()
 
     rs = avg_gain / avg_loss
-
-    rsi = 100 - (
-        100 / (1 + rs)
-    )
-
+    rsi = 100 - (100 / (1 + rs))
 
     # ========================================================
     # MACD
     # ========================================================
-
-    ema12 = close.ewm(
-        span=12,
-        adjust=False
-    ).mean()
-
-    ema26 = close.ewm(
-        span=26,
-        adjust=False
-    ).mean()
-
+    ema12 = close.ewm(span=12, adjust=False).mean()
+    ema26 = close.ewm(span=26, adjust=False).mean()
     macd = ema12 - ema26
-
-    macd_signal = macd.ewm(
-        span=9,
-        adjust=False
-    ).mean()
-
-    macd_histogram = (
-        macd - macd_signal
-    )
-
+    macd_signal = macd.ewm(span=9, adjust=False).mean()
+    macd_histogram = macd - macd_signal
 
     # ========================================================
-    # ATR
+    # ATR (Wilder's Smoothing 적용)
     # ========================================================
-
+    
     previous_close = close.shift(1)
 
     tr1 = high - low
+    tr2 = (high - previous_close).abs()
+    tr3 = (low - previous_close).abs()
 
-    tr2 = (
-        high - previous_close
-    ).abs()
-
-    tr3 = (
-        low - previous_close
-    ).abs()
-
-    true_range = pd.concat(
-        [
-            tr1,
-            tr2,
-            tr3
-        ],
-        axis=1
-    ).max(
-        axis=1
-    )
-
-    atr14 = (
-        true_range
-        .rolling(14)
-        .mean()
-    )
-
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr14 = true_range.ewm(alpha=1 / 14, adjust=False).mean()
 
     # ========================================================
-    # 변동성
+    # 변동성 및 거래량
     # ========================================================
-
+    
     daily_return = close.pct_change()
+    volatility20 = daily_return.rolling(20).std() * 100
+    volume_ma20 = volume.rolling(20).mean()
 
-    volatility20 = (
-        daily_return
-        .rolling(20)
-        .std()
-        * 100
-    )
-
-
-    # ========================================================
-    # 거래량 평균
-    # ========================================================
-
-    volume_ma20 = (
-        volume
-        .rolling(20)
-        .mean()
-    )
-
-
-    # ========================================================
-    # 최근 가격
-    # ========================================================
-
-    current = safe_float(
-        close.iloc[-1]
-    )
-
-    previous = safe_float(
-        close.iloc[-2]
-    )
-
-    current_ma20 = safe_float(
-        ma20.iloc[-1]
-    )
-
-    current_ma50 = safe_float(
-        ma50.iloc[-1]
-    )
-
-    current_ma200 = safe_float(
-        ma200.iloc[-1]
-    )
-
-    current_rsi = safe_float(
-        rsi.iloc[-1]
-    )
-
-    current_macd = safe_float(
-        macd.iloc[-1]
-    )
-
-    current_signal = safe_float(
-        macd_signal.iloc[-1]
-    )
-
-    current_histogram = safe_float(
-        macd_histogram.iloc[-1]
-    )
-
-    current_atr = safe_float(
-        atr14.iloc[-1]
-    )
-
-    current_volatility = safe_float(
-        volatility20.iloc[-1]
-    )
-
-    current_volume = safe_float(
-        volume.iloc[-1]
-    )
-
-    current_volume_ma20 = safe_float(
-        volume_ma20.iloc[-1]
-    )
+    # 최근 가격 및 지표 추출
+    current = safe_float(close.iloc[-1])
+    previous = safe_float(close.iloc[-2])
+    current_ma20 = safe_float(ma20.iloc[-1])
+    current_ma50 = safe_float(ma50.iloc[-1])
+    current_ma200 = safe_float(ma200.iloc[-1])
+    current_rsi = safe_float(rsi.iloc[-1])
+    current_macd = safe_float(macd.iloc[-1])
+    current_signal = safe_float(macd_signal.iloc[-1])
+    current_histogram = safe_float(macd_histogram.iloc[-1])
+    current_atr = safe_float(atr14.iloc[-1])
+    current_volatility = safe_float(volatility20.iloc[-1])
+    current_volume = safe_float(volume.iloc[-1])
+    current_volume_ma20 = safe_float(volume_ma20.iloc[-1])
 
 
-    # ========================================================
+
     # 일간 변동률
-    # ========================================================
-
+    
     daily_change = None
+    if current is not None and previous is not None and previous != 0:
+        daily_change = ((current - previous) / previous) * 100
 
-    if (
-        current is not None
-        and previous is not None
-        and previous != 0
-    ):
-
-        daily_change = (
-            (current - previous)
-            / previous
-            * 100
-        )
-
-
-    # ========================================================
     # 이동평균 상태
-    # ========================================================
-
+    
     if (
         current is not None
         and current_ma20 is not None
         and current_ma50 is not None
         and current_ma200 is not None
     ):
-
-        if (
-            current > current_ma20
-            and current_ma20 > current_ma50
-            and current_ma50 > current_ma200
-        ):
-
+        if current > current_ma20 > current_ma50 > current_ma200:
             trend = "강한 상승 추세"
-
-        elif (
-            current < current_ma20
-            and current_ma20 < current_ma50
-            and current_ma50 < current_ma200
-        ):
-
+        elif current < current_ma20 < current_ma50 < current_ma200:
             trend = "강한 하락 추세"
 
         elif current > current_ma20:
@@ -431,10 +239,9 @@ def get_market_data(ticker):
         trend = "판단 불가"
 
 
-    # ========================================================
-    # RSI 상태
-    # ========================================================
 
+    # RSI 상태
+    
     if current_rsi is None:
 
         rsi_status = "판단 불가"
@@ -456,14 +263,9 @@ def get_market_data(ticker):
         rsi_status = "중립적 약세"
 
 
-    # ========================================================
-    # MACD 상태
-    # ========================================================
 
-    if (
-        current_macd is not None
-        and current_signal is not None
-    ):
+    # MACD 상태
+    if current_macd is not None and current_signal is not None:
 
         if current_macd > current_signal:
 
@@ -482,21 +284,15 @@ def get_market_data(ticker):
         macd_status = "판단 불가"
 
 
-    # ========================================================
-    # 거래량 상태
-    # ========================================================
 
+    # 거래량 상태
+    
     if (
         current_volume is not None
         and current_volume_ma20 is not None
         and current_volume_ma20 != 0
     ):
-
-        volume_ratio = (
-            current_volume
-            / current_volume_ma20
-        )
-
+        volume_ratio = current_volume / current_volume_ma20
         if volume_ratio >= 2:
 
             volume_status = "평균 대비 2배 이상 급증"
@@ -520,66 +316,26 @@ def get_market_data(ticker):
         volume_status = "판단 불가"
 
 
-    # ========================================================
+
     # 지지 / 저항 참고용
-    # ========================================================
-
-    recent_20_high = safe_float(
-        high.tail(20).max()
-    )
-
-    recent_20_low = safe_float(
-        low.tail(20).min()
-    )
-
-    recent_50_high = safe_float(
-        high.tail(50).max()
-    )
-
-    recent_50_low = safe_float(
-        low.tail(50).min()
-    )
+    recent_20_high = safe_float(high.tail(20).max())
+    recent_20_low = safe_float(low.tail(20).min())
+    recent_50_high = safe_float(high.tail(50).max())
+    recent_50_low = safe_float(low.tail(50).min())
 
 
-    # ========================================================
+
     # 최근 수익률
-    # ========================================================
-
+    
     def period_return(days):
 
         if len(close) <= days:
             return None
-
-        start = safe_float(
-            close.iloc[-days - 1]
-        )
-
+        start = safe_float(close.iloc[-days - 1])
         end = current
-
-        if (
-            start is None
-            or end is None
-            or start == 0
-        ):
-
+        if start is None or end is None or start == 0:
             return None
-
-        return (
-            (end - start)
-            / start
-            * 100
-        )
-
-
-    return_5d = period_return(5)
-    return_20d = period_return(20)
-    return_60d = period_return(60)
-    return_120d = period_return(120)
-
-
-    # ========================================================
-    # 최종 데이터
-    # ========================================================
+        return ((end - start) / start) * 100
 
     return {
 
@@ -630,16 +386,11 @@ def get_market_data(ticker):
         "recent_50_day_high": recent_50_high,
 
         "recent_50_day_low": recent_50_low,
-
-        "5_day_return_percent": return_5d,
-
-        "20_day_return_percent": return_20d,
-
-        "60_day_return_percent": return_60d,
-
-        "120_day_return_percent": return_120d,
-
-        "trend": trend
+        "5_day_return_percent": period_return(5),
+        "20_day_return_percent": period_return(20),
+        "60_day_return_percent": period_return(60),
+        "120_day_return_percent": period_return(120),
+        "trend": trend,
     }
 
 
@@ -647,57 +398,71 @@ def get_market_data(ticker):
 # 🐍 이묵 분석
 # ============================================================
 
-def analyze_stock(
-    ticker,
-    portfolio_context=None
-):
 
-    ticker = ticker.upper().strip()
+def analyze_stock(ticker=None, portfolio_context=None):
+    if portfolio_context is None:
+        portfolio_context = {"holding": False}
 
+    # ----------------------------------------------------
+    # 🛠️ [안전 조치] ticker가 None이거나 비어있을 때 처리
+    # ----------------------------------------------------
+    target_ticker = None
 
-    # --------------------------------------------------------
-    # 기술적 데이터
-    # --------------------------------------------------------
+    if ticker and isinstance(ticker, str) and ticker.strip():
+        target_ticker = ticker.strip().upper()
 
-    technical_data = get_market_data(
-        ticker
-    )
+    # ticker가 넘어오지 않은 경우 계좌 컨텍스트에서 탐색
+    if not target_ticker and isinstance(portfolio_context, dict):
+        # 1. 포트폴리오 정보 내 holdings 확인
+        holdings = portfolio_context.get("holdings", [])
+        if holdings and isinstance(holdings, list) and len(holdings) > 0:
+            first_holding = holdings[0]
+            if isinstance(first_holding, dict):
+                target_ticker = first_holding.get("ticker") or first_holding.get("symbol")
+
+        # 2. 단일 ticker 필드가 있는지 확인
+        if not target_ticker:
+            target_ticker = portfolio_context.get("ticker") or portfolio_context.get("symbol")
+
+    # 그래도 없으면 ai_portfolio.json 읽기 시도
+    if not target_ticker:
+        try:
+            portfolio_file = os.path.join(BASE_DIR, "ai_portfolio.json")
+            if os.path.exists(portfolio_file):
+                with open(portfolio_file, "r", encoding="utf-8") as f:
+                    p_data = json.load(f)
+                    holdings = p_data.get("holdings", [])
+                    if holdings and len(holdings) > 0:
+                        target_ticker = holdings[0].get("ticker") or holdings[0].get("symbol")
+        except Exception:
+            pass
+
+    # 모든 탐색에도 실패한 경우
+    if not target_ticker:
+        print("❌ 분석할 티커(ticker) 정보를 찾을 수 없습니다.")
+        return None
+
+    ticker = target_ticker.upper().strip()
+
+    technical_data = get_market_data(ticker)
+
+    if "error" in technical_data:
+        print(f"❌ 데이터 수집 오류: {technical_data['error']}")
+        return None
 
     memory = load_memory()
 
-
-    if portfolio_context is None:
-
-        portfolio_context = {
-            "holding": False
-        }
-
-
     analysis_data = {
-
-        "technical_data":
-            technical_data,
-
-        "portfolio_context":
-            portfolio_context,
-
-        "memory":
-            memory
+        "technical_data": technical_data,
+        "portfolio_context": portfolio_context,
+        "memory": memory,
     }
 
-
     data_text = json.dumps(
-        analysis_data,
-        ensure_ascii=False,
-        indent=2,
-        default=str
+        analysis_data, ensure_ascii=False, indent=2, default=str
     )
 
-
-    # ========================================================
-    # 🐍 이묵 프롬프트
-    # ========================================================
-
+   
     prompt = f"""
 너는 사용자의 AI 투자 분석팀 소속
 기술적 분석 AI "이묵"이다.
@@ -1174,48 +939,29 @@ MACD까지 상승한다면
 {data_text}
 """
 
-
-    # ========================================================
-    # Gemini 실행
-    # ========================================================
-
+    
     print()
     print("=" * 70)
-    print("                 🐍 이묵 기술적 AI")
+    print("                🐍 이묵 기술적 AI")
     print("=" * 70)
     print()
 
-    print(
-        f"📡 이묵이 {ticker} 차트의 허점을 찾아보는 중..."
-    )
+    print(f"📡 이묵이 {ticker} 차트의 허점을 찾아보는 중...")
 
     print()
 
+    # 모델명을 정식 라인업 구문으로 지정 (gemini-3.6-flash)
     response = client.models.generate_content(
-        model="gemini-3.6-flash",
-        contents=prompt
+        model="gemini-3.6-flash", contents=prompt
     )
 
     result = response.text
 
+    history_path = save_analysis_history(ticker, result)
 
-    # ========================================================
-    # 저장
-    # ========================================================
+    print("💾 이묵 분석 저장 완료")
 
-    history_path = save_analysis_history(
-        ticker,
-        result
-    )
-
-    print(
-        "💾 이묵 분석 저장 완료"
-    )
-
-    print(
-        f"📁 {history_path}"
-    )
-
+    print(f"📁 {history_path}")
 
     return result
 
@@ -1228,42 +974,33 @@ if __name__ == "__main__":
 
     print()
     print("=" * 70)
-    print("                 🐍 이묵 기술적 분석 AI")
+    print("                🐍 이묵 기술적 분석 AI")
     print("=" * 70)
     print()
 
-    ticker = input(
-        "분석할 미국 주식 티커를 입력하세요: "
-    ).strip().upper()
-
+    ticker = input("분석할 미국 주식 티커를 입력하세요: ").strip().upper()
 
     if not ticker:
-
-        print(
-            "❌ 티커가 입력되지 않았습니다."
-        )
-
+        print("❌ 티커가 입력되지 않았습니다.")
         exit()
 
 
     try:
+        result = analyze_stock(ticker)
 
-        result = analyze_stock(
-            ticker
-        )
+        if result:
+            print()
+            print("=" * 70)
+            print("                🐍 이묵 분석")
+            print("=" * 70)
+            print()
 
-        print()
-        print("=" * 70)
-        print("                 🐍 이묵 분석")
-        print("=" * 70)
-        print()
+            print(result)
 
-        print(result)
-
-        print()
-        print("=" * 70)
-        print("                 분석 완료")
-        print("=" * 70)
+            print()
+            print("=" * 70)
+            print("                분석 완료")
+            print("=" * 70)
 
 
     except Exception as e:
@@ -1273,6 +1010,4 @@ if __name__ == "__main__":
         print("❌ 이묵 분석 중 오류 발생")
         print("=" * 70)
 
-        print(
-            f"{type(e).__name__}: {e}"
-        )
+        print(f"{type(e).__name__}: {e}")
