@@ -1,14 +1,17 @@
+
 import os
 import json
 import importlib
 import inspect
+import time
 from datetime import datetime
+
 
 # ============================================================
 # 🏦 AI TRADING TEAM
-# 통합 회의 시스템 (프롬프트 기반 가상 회의 토론 방식)
+# 통합 투자 분석 시스템
 #
-# 흐름
+# 실행 순서
 #
 # 사용자 질문
 #      ↓
@@ -16,18 +19,20 @@ from datetime import datetime
 #      ↓
 # 토스 계좌정보 수집
 #      ↓
-# ┌──────────────────────────────────────────────┐
-# │ 🐦 김선달  → CROW_SYSTEM_PROMPT               │
-# │ 🐍 이묵    → SNAKE_SYSTEM_PROMPT              │
-# │ 🦝 너부리  → RACCOON_SYSTEM_PROMPT            │
-# │ 🐢 현무    → TURTLE_SYSTEM_PROMPT             │
-# └──────────────────────────────────────────────┘
+# 🐦 김선달  → 펀더멘털 + 뉴스
 #      ↓
-# main.py에서 4명 AI 프롬프트 변수 통합 (방법 2)
+# 🐍 이묵    → 기술적 분석
 #      ↓
-# 🐱 알프레도 / 메인 LLM에 통합 토론 프롬프트 전달
+# 🦝 너부리  → 포트폴리오 + 계좌
 #      ↓
-# 4명 캐릭터 말투/성격 100% 반영된 회의 대화록 + 최종 투자 판단
+# 🐢 현무    → 거시경제 + 시장환경
+#      ↓
+# 🐱 알프레도 → 원본 검증 + 교차검증 + 최종 판단
+#
+# ★ 중요
+# main.py는 "회의 진행자"다.
+# 각 AI가 자기 담당 영역을 벗어나지 않도록
+# 질문 / 분석유형 / 분석종목 / 계좌원본을 명확하게 전달한다.
 # ============================================================
 
 
@@ -73,6 +78,15 @@ os.makedirs(
     HISTORY_DIR,
     exist_ok=True
 )
+
+
+# ============================================================
+# AI 호출 설정
+# ============================================================
+
+MAX_AI_RETRIES = 3
+
+RETRY_WAIT_SECONDS = 3
 
 
 # ============================================================
@@ -282,6 +296,10 @@ def extract_tickers(
     text
 ):
 
+    if not text:
+
+        return []
+
     text_upper = text.upper()
 
     found = []
@@ -308,6 +326,10 @@ def detect_intent(
     tickers
 ):
 
+    if not text:
+
+        return "general"
+
     text_lower = text.lower()
 
     portfolio_keywords = [
@@ -319,7 +341,9 @@ def detect_intent(
         "보유종목",
         "보유 종목",
         "전체 자산",
-        "비중"
+        "비중",
+        "내 자산",
+        "계좌 전체"
     ]
 
     market_keywords = [
@@ -333,7 +357,9 @@ def detect_intent(
         "금리",
         "나스닥",
         "s&p",
-        "vix"
+        "vix",
+        "연준",
+        "fed"
     ]
 
     trading_keywords = [
@@ -361,6 +387,10 @@ def detect_intent(
         "어떤 게"
     ]
 
+    # --------------------------------------------------------
+    # 계좌 질문
+    # --------------------------------------------------------
+
     if any(
         keyword in text_lower
         for keyword in portfolio_keywords
@@ -372,12 +402,20 @@ def detect_intent(
 
         return "portfolio"
 
+    # --------------------------------------------------------
+    # 시장 질문
+    # --------------------------------------------------------
+
     if any(
         keyword in text_lower
         for keyword in market_keywords
     ):
 
         return "market"
+
+    # --------------------------------------------------------
+    # 종목 비교
+    # --------------------------------------------------------
 
     if len(tickers) >= 2:
 
@@ -389,6 +427,10 @@ def detect_intent(
     ):
 
         return "comparison"
+
+    # --------------------------------------------------------
+    # 종목 질문
+    # --------------------------------------------------------
 
     if tickers:
 
@@ -431,6 +473,9 @@ def parse_question(
 
         "intent":
             intent,
+
+        "primary_ticker":
+            tickers[0] if tickers else None,
 
         "timestamp":
             datetime.now().isoformat()
@@ -601,8 +646,8 @@ def find_analysis_function(
         "analysis",
 
         "run_analysis",
-        
-        "run_discussion"  # 가상 회의용 함수 추가
+
+        "run_discussion"
     ]
 
     for name in candidates:
@@ -621,28 +666,214 @@ def find_analysis_function(
 
 
 # ============================================================
-# ⭐ [방법 2] 프롬프트 변수 가져오기 (안전 추출 함수)
-# 각 AI 파일의 SYSTEM_PROMPT 또는 PROMPT 변수 추출
+# AI 프롬프트 가져오기
 # ============================================================
 
-def get_ai_prompt(module, default_name):
+def get_ai_prompt(
+    module,
+    default_name
+):
 
     if module is None:
 
-        return f"({default_name} 성격 지침 없음)"
+        return f"({default_name} 모듈 없음)"
 
-    # 변수 이름 후보들 탐색
-    for attr in ["SYSTEM_PROMPT", "PROMPT", "CHARACTER_PROMPT", "CROW_SYSTEM_PROMPT", "SNAKE_SYSTEM_PROMPT", "RACCOON_SYSTEM_PROMPT", "TURTLE_SYSTEM_PROMPT"]:
+    candidates = [
 
-        if hasattr(module, attr):
+        "SYSTEM_PROMPT",
 
-            return getattr(module, attr)
+        "PROMPT",
 
-    return f"({default_name} 관점 분석 및 성격 지침)"
+        "CHARACTER_PROMPT",
+
+        "CROW_SYSTEM_PROMPT",
+
+        "SNAKE_SYSTEM_PROMPT",
+
+        "RACCOON_SYSTEM_PROMPT",
+
+        "TURTLE_SYSTEM_PROMPT"
+    ]
+
+    for attr in candidates:
+
+        if hasattr(
+            module,
+            attr
+        ):
+
+            value = getattr(
+                module,
+                attr
+            )
+
+            if value is not None:
+
+                return str(
+                    value
+                )
+
+    return (
+        f"({default_name} "
+        f"관점 분석 및 성격 지침)"
+    )
 
 
 # ============================================================
-# AI 분석 함수 호출
+# ⭐ AI에게 전달할 분석 컨텍스트 생성
+# ============================================================
+
+def build_analysis_context(
+    parsed,
+    account_data
+):
+
+    intent = parsed.get(
+        "intent",
+        "general"
+    )
+
+    tickers = parsed.get(
+        "tickers",
+        []
+    )
+
+    primary_ticker = (
+        tickers[0]
+        if tickers
+        else None
+    )
+
+    # --------------------------------------------------------
+    # 분석 대상
+    # --------------------------------------------------------
+
+    if tickers:
+
+        analysis_target = (
+            ", ".join(tickers)
+        )
+
+    elif intent in [
+        "portfolio",
+        "market",
+        "general"
+    ]:
+
+        analysis_target = (
+            "특정 종목 없음"
+        )
+
+    else:
+
+        analysis_target = (
+            "특정 종목 없음"
+        )
+
+    # --------------------------------------------------------
+    # 명확한 지침
+    # --------------------------------------------------------
+
+    if intent == "portfolio":
+
+        target_instruction = """
+사용자는 전체 계좌/포트폴리오를 분석해달라고 요청했다.
+
+특정 종목을 질문한 것이 아니다.
+
+따라서 계좌 원본의 보유종목, 평가금액, 매수금액,
+손익, 비중, 현금 등을 중심으로 분석해야 한다.
+
+계좌 원본에 없는 종목을 임의로 분석 대상으로 추가하지 마라.
+"""
+
+    elif intent == "portfolio_stock":
+
+        target_instruction = f"""
+사용자는 계좌 전체를 보는 동시에
+특정 종목 {primary_ticker}에 대해서도 질문했다.
+
+{primary_ticker}을 중심으로 분석하되,
+반드시 실제 계좌 내 보유수량/평가금액/비중과 연결해서 판단하라.
+
+계좌 원본에 없는 종목을 임의로 추가하지 마라.
+"""
+
+    elif intent in [
+        "stock_analysis",
+        "stock_decision"
+    ]:
+
+        target_instruction = f"""
+사용자가 명시한 분석 종목은 {primary_ticker}이다.
+
+이번 분석의 주 분석 대상은 반드시 {primary_ticker}이다.
+
+사용자가 언급하지 않은 다른 종목을
+주 분석 대상으로 바꾸지 마라.
+
+다른 종목을 언급할 필요가 있다면
+반드시 {primary_ticker}의 판단에 직접 필요한 경우에만
+보조적으로 언급하라.
+"""
+
+    elif intent == "comparison":
+
+        target_instruction = f"""
+사용자가 비교 대상으로 지정한 종목은
+{", ".join(tickers)}이다.
+
+비교 대상 외의 종목을 임의로 주 분석 대상으로 추가하지 마라.
+"""
+
+    elif intent == "market":
+
+        target_instruction = """
+사용자는 미국 증시/시장환경/매크로 분석을 요청했다.
+
+개별 종목 하나를 임의로 선택해서 분석하지 마라.
+
+시장지수, 금리, 변동성, 경기, 연준,
+성장주/가치주 환경 등을 중심으로 분석하라.
+"""
+
+    else:
+
+        target_instruction = """
+사용자 질문을 그대로 해석하고,
+질문에서 요구하지 않은 종목을 임의로 만들어 분석하지 마라.
+"""
+
+    return {
+
+        "intent":
+            intent,
+
+        "tickers":
+            tickers,
+
+        "primary_ticker":
+            primary_ticker,
+
+        "analysis_target":
+            analysis_target,
+
+        "target_instruction":
+            target_instruction,
+
+        "question":
+            parsed.get(
+                "question",
+                ""
+            ),
+
+        "account_data":
+            account_data
+    }
+
+
+# ============================================================
+# ⭐ AI 호출
 # ============================================================
 
 def call_ai(
@@ -672,17 +903,35 @@ def call_ai(
 
         return None
 
-    ticker = get_primary_ticker(
-        parsed
+    question = parsed.get(
+        "question",
+        ""
     )
 
-    question = parsed[
-        "question"
-    ]
+    intent = parsed.get(
+        "intent",
+        "general"
+    )
 
-    intent = parsed[
-        "intent"
-    ]
+    tickers = parsed.get(
+        "tickers",
+        []
+    )
+
+    primary_ticker = (
+        tickers[0]
+        if tickers
+        else None
+    )
+
+    analysis_context = build_analysis_context(
+        parsed,
+        account_data
+    )
+
+    # --------------------------------------------------------
+    # 함수 인자 확인
+    # --------------------------------------------------------
 
     try:
 
@@ -698,9 +947,30 @@ def call_ai(
 
     kwargs = {}
 
+    # --------------------------------------------------------
+    # ticker
+    #
+    # ★ 중요
+    # 종목이 없는 portfolio/market 질문에서는
+    # None을 무조건 넘기지 않는다.
+    #
+    # 해당 함수가 ticker를 요구하더라도
+    # 빈 문자열을 전달하여 None.upper() 오류를 방지한다.
+    # --------------------------------------------------------
+
     if "ticker" in parameters:
 
-        kwargs["ticker"] = ticker
+        if primary_ticker:
+
+            kwargs["ticker"] = primary_ticker
+
+        else:
+
+            kwargs["ticker"] = ""
+
+    # --------------------------------------------------------
+    # question
+    # --------------------------------------------------------
 
     if "question" in parameters:
 
@@ -710,19 +980,25 @@ def call_ai(
 
         kwargs["user_question"] = question
 
+    # --------------------------------------------------------
+    # intent
+    # --------------------------------------------------------
+
     if "intent" in parameters:
 
         kwargs["intent"] = intent
+
+    # --------------------------------------------------------
+    # parsed
+    # --------------------------------------------------------
 
     if "parsed" in parameters:
 
         kwargs["parsed"] = parsed
 
-    if "portfolio_context" in parameters:
-
-        kwargs[
-            "portfolio_context"
-        ] = account_data
+    # --------------------------------------------------------
+    # account_data
+    # --------------------------------------------------------
 
     if "account_data" in parameters:
 
@@ -730,65 +1006,228 @@ def call_ai(
             "account_data"
         ] = account_data
 
+    # --------------------------------------------------------
+    # portfolio_context
+    # --------------------------------------------------------
+
+    if "portfolio_context" in parameters:
+
+        kwargs[
+            "portfolio_context"
+        ] = account_data
+
+    # --------------------------------------------------------
+    # analysis_context
+    # --------------------------------------------------------
+
+    if "analysis_context" in parameters:
+
+        kwargs[
+            "analysis_context"
+        ] = analysis_context
+
+    # --------------------------------------------------------
+    # context
+    # --------------------------------------------------------
+
+    if "context" in parameters:
+
+        kwargs[
+            "context"
+        ] = analysis_context
+
+    # --------------------------------------------------------
+    # target_ticker
+    # --------------------------------------------------------
+
+    if "target_ticker" in parameters:
+
+        kwargs[
+            "target_ticker"
+        ] = primary_ticker
+
+    # --------------------------------------------------------
+    # tickers
+    # --------------------------------------------------------
+
+    if "tickers" in parameters:
+
+        kwargs[
+            "tickers"
+        ] = tickers
+
+    # --------------------------------------------------------
+    # 출력
+    # --------------------------------------------------------
+
     print()
-    print(
-        "=" * 70
-    )
+    print("=" * 70)
 
     print(
         f"                 {ai_name} 분석 시작"
     )
 
-    print(
-        "=" * 70
-    )
+    print("=" * 70)
 
-    try:
-
-        result = function(
-            **kwargs
-        )
-
-        return result
-
-    except TypeError as e:
+    if primary_ticker:
 
         print(
-            f"⚠️ {ai_name} 인자 전달 방식 오류"
+            f"🎯 분석 대상: {', '.join(tickers)}"
         )
 
-        print(e)
+    else:
+
+        print(
+            f"🎯 분석 대상: {analysis_context['analysis_target']}"
+        )
+
+    print(
+        f"🧠 분석 유형: {intent}"
+    )
+
+    # --------------------------------------------------------
+    # ★ 재시도
+    # --------------------------------------------------------
+
+    last_error = None
+
+    for attempt in range(
+        1,
+        MAX_AI_RETRIES + 1
+    ):
 
         try:
 
-            result = function()
+            if attempt > 1:
 
-            return result
+                print(
+                    f"🔄 {ai_name} 재시도 "
+                    f"{attempt}/{MAX_AI_RETRIES}"
+                )
 
-        except Exception as retry_error:
+                time.sleep(
+                    RETRY_WAIT_SECONDS
+                )
 
-            print(
-                f"❌ {ai_name} 분석 실패"
+            result = function(
+                **kwargs
             )
 
+            if result is not None:
+
+                return result
+
             print(
-                f"{type(retry_error).__name__}: "
-                f"{retry_error}"
+                f"⚠️ {ai_name} 분석 결과가 비어 있습니다."
             )
 
             return None
 
-    except Exception as e:
+        except TypeError as e:
 
-        print(
-            f"❌ {ai_name} 분석 중 오류"
-        )
+            last_error = e
 
-        print(
-            f"{type(e).__name__}: {e}"
-        )
+            print(
+                f"⚠️ {ai_name} 인자 전달 오류"
+            )
 
-        return None
+            print(e)
+
+            # ------------------------------------------------
+            # ★ 정말 인자 문제일 때만
+            # 인자 없는 함수 호출을 마지막 fallback으로 사용
+            # ------------------------------------------------
+
+            if attempt == MAX_AI_RETRIES:
+
+                try:
+
+                    print(
+                        f"🔄 {ai_name} 기본 호출 방식으로 재시도"
+                    )
+
+                    result = function()
+
+                    return result
+
+                except Exception as retry_error:
+
+                    print(
+                        f"❌ {ai_name} 분석 실패"
+                    )
+
+                    print(
+                        f"{type(retry_error).__name__}: "
+                        f"{retry_error}"
+                    )
+
+                    return None
+
+        except Exception as e:
+
+            last_error = e
+
+            error_text = str(
+                e
+            ).lower()
+
+            error_name = type(
+                e
+            ).__name__.lower()
+
+            # ------------------------------------------------
+            # Gemini / API 일시적 오류
+            # ------------------------------------------------
+
+            transient_error = any(
+                keyword in (
+                    error_text
+                    + " "
+                    + error_name
+                )
+                for keyword in [
+                    "503",
+                    "unavailable",
+                    "429",
+                    "resource exhausted",
+                    "rate limit",
+                    "high demand",
+                    "temporarily",
+                    "timeout",
+                    "deadline"
+                ]
+            )
+
+            if transient_error:
+
+                print(
+                    f"⚠️ {ai_name} 일시적 API 오류 "
+                    f"({attempt}/{MAX_AI_RETRIES})"
+                )
+
+                print(
+                    f"{type(e).__name__}: {e}"
+                )
+
+                if attempt < MAX_AI_RETRIES:
+
+                    continue
+
+            # ------------------------------------------------
+            # 일반 오류
+            # ------------------------------------------------
+
+            print(
+                f"❌ {ai_name} 분석 중 오류"
+            )
+
+            print(
+                f"{type(e).__name__}: {e}"
+            )
+
+            break
+
+    return None
 
 
 # ============================================================
@@ -827,7 +1266,7 @@ def normalize_result(
 
 
 # ============================================================
-# ⭐ [방법 2 적용] 회의 시작 및 프롬프트 기반 가상 토론 실행
+# ⭐ 회의 시작
 # ============================================================
 
 def start_meeting(
@@ -840,6 +1279,26 @@ def start_meeting(
         parsed
     )
 
+    tickers = parsed.get(
+        "tickers",
+        []
+    )
+
+    intent = parsed.get(
+        "intent",
+        "general"
+    )
+
+    question = parsed.get(
+        "question",
+        ""
+    )
+
+    analysis_context = build_analysis_context(
+        parsed,
+        account_data
+    )
+
     print()
     print("=" * 70)
     print(
@@ -849,10 +1308,10 @@ def start_meeting(
 
     print()
 
-    if ticker:
+    if tickers:
 
         print(
-            f"🎯 분석 대상: {ticker}"
+            f"🎯 분석 대상: {', '.join(tickers)}"
         )
 
     else:
@@ -860,6 +1319,10 @@ def start_meeting(
         print(
             "🎯 분석 대상: 전체 시장 / 포트폴리오"
         )
+
+    print(
+        f"🧠 분석 유형: {intent}"
+    )
 
     print()
 
@@ -887,53 +1350,150 @@ def start_meeting(
         "🐱 알프레도 → 원본 검증 + 교차검증 + 회의 주관"
     )
 
-    # --------------------------------------------------------
-    # ⭐ 방법 2: 각 AI 모듈에서 프롬프트 변수 불러오기
-    # --------------------------------------------------------
+    # ========================================================
+    # ⭐ 각 AI 프롬프트
+    # ========================================================
 
-    crow_prompt = get_ai_prompt(modules["crow"], "🐦 김선달")
-    snake_prompt = get_ai_prompt(modules["snake"], "🐍 이묵")
-    raccoon_prompt = get_ai_prompt(modules["raccoon"], "🦝 너부리")
-    turtle_prompt = get_ai_prompt(modules["turtle"], "🐢 현무")
+    crow_prompt = get_ai_prompt(
+        modules["crow"],
+        "🐦 김선달"
+    )
 
-    # --------------------------------------------------------
-    # ⭐ 4명 프롬프트를 하나로 합친 회의 프롬프트 생성
-    # --------------------------------------------------------
+    snake_prompt = get_ai_prompt(
+        modules["snake"],
+        "🐍 이묵"
+    )
+
+    raccoon_prompt = get_ai_prompt(
+        modules["raccoon"],
+        "🦝 너부리"
+    )
+
+    turtle_prompt = get_ai_prompt(
+        modules["turtle"],
+        "🐢 현무"
+    )
+
+    # ========================================================
+    # ⭐ 회의 프롬프트
+    # ========================================================
 
     discussion_prompt = f"""
-[AI TRADING TEAM 실시간 대화식 투자 회의]
+[AI TRADING TEAM 실시간 투자 회의]
 
-■ 사용자 질문: {parsed['question']}
-■ 현재 계좌 상태: {json.dumps(account_data, ensure_ascii=False)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[사용자 요청]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-■ 참석 AI 패널 시스템 프롬프트 및 성격:
-1. 🐦 김선달 (펀더멘털/뉴스):
+사용자 질문:
+{question}
+
+분석 유형:
+{intent}
+
+명시된 분석 종목:
+{json.dumps(tickers, ensure_ascii=False)}
+
+주 분석 종목:
+{ticker if ticker else "없음"}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[분석 대상 통제 규칙]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{analysis_context["target_instruction"]}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[현재 계좌 원본]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{json.dumps(account_data, ensure_ascii=False, indent=2, default=str)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[AI 패널]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🐦 김선달
+역할: 펀더멘털 + 뉴스
+
 {crow_prompt}
 
-2. 🐍 이묵 (기술적 분석/차트):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🐍 이묵
+역할: 기술적 분석
+
 {snake_prompt}
 
-3. 🦝 너부리 (포트폴리오/계좌 관리):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🦝 너부리
+역할: 포트폴리오 + 계좌
+
 {raccoon_prompt}
 
-4. 🐢 현무 (거시경제/시장환경):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🐢 현무
+역할: 거시경제 + 시장환경
+
 {turtle_prompt}
 
-■ 회의 진행 지침:
-- 위 4명의 AI 캐릭터 성격, 어조, 분석 시각을 100% 반영하여 실제 회의를 하듯 티키타카 대화록을 작성하세요.
-- 단순히 의견을 나열하지 말고, 서로의 의견에 반박하거나 동조하며 활발하게 토론하세요.
-- 마지막에는 사회자(🐱 알프레도)가 회의 내용을 요약하고 최종 투자 실행 판단(매수/매도/관망/비중조절)을 내리세요.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[회의 규칙]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 사용자 질문을 가장 먼저 기준으로 삼아라.
+
+2. 사용자가 특정 종목을 언급했다면
+   그 종목을 주 분석 대상으로 유지하라.
+
+3. 사용자가 계좌 전체를 물었다면
+   계좌 원본에 실제 존재하는 종목만 분석하라.
+
+4. 계좌 원본에 없는 종목을
+   임의로 분석 대상으로 끌어오지 마라.
+
+5. 이전 회의의 종목이나 과거 질문을
+   현재 질문보다 우선하지 마라.
+
+6. 확인되지 않은 숫자는 사실처럼 단정하지 마라.
+
+7. 원본 데이터와 AI의 주장이 다르면
+   원본 데이터를 우선하여 검증하라.
+
+8. 각 AI는 자기 담당 분야를 우선하라.
+
+9. 마지막에는 🐱 알프레도가
+   네 명의 의견과 원본 데이터를 교차검증한다.
+
+10. 최종 판단은 매수 / 매도 / 보유 / 관망 /
+    비중조절 중 가장 적절한 행동을 선택한다.
 """
 
-    # --------------------------------------------------------
-    # 1~4. 4명의 개별 AI 분석도 수행 (기존 기능 유지)
-    # --------------------------------------------------------
+    # ========================================================
+    # ⭐⭐⭐⭐⭐
+    # 실제 호출 순서
+    #
+    # 반드시
+    # 김선달 → 이묵 → 너부리 → 현무
+    # ========================================================
+
+    print()
+    print(
+        "▶ 1단계: 🐦 김선달"
+    )
 
     crow_result = call_ai(
         modules["crow"],
         "🐦 김선달",
         parsed,
         account_data
+    )
+
+    print()
+    print(
+        "▶ 2단계: 🐍 이묵"
     )
 
     snake_result = call_ai(
@@ -943,11 +1503,21 @@ def start_meeting(
         account_data
     )
 
+    print()
+    print(
+        "▶ 3단계: 🦝 너부리"
+    )
+
     raccoon_result = call_ai(
         modules["raccoon"],
         "🦝 너부리",
         parsed,
         account_data
+    )
+
+    print()
+    print(
+        "▶ 4단계: 🐢 현무"
     )
 
     turtle_result = call_ai(
@@ -957,24 +1527,36 @@ def start_meeting(
         account_data
     )
 
+    # ========================================================
+    # 결과 정규화
+    # ========================================================
+
     team_results = {
 
-        "crow": normalize_result(
-            crow_result
-        ),
+        "crow":
+            normalize_result(
+                crow_result
+            ),
 
-        "snake": normalize_result(
-            snake_result
-        ),
+        "snake":
+            normalize_result(
+                snake_result
+            ),
 
-        "raccoon": normalize_result(
-            raccoon_result
-        ),
+        "raccoon":
+            normalize_result(
+                raccoon_result
+            ),
 
-        "turtle": normalize_result(
-            turtle_result
-        )
+        "turtle":
+            normalize_result(
+                turtle_result
+            )
     }
+
+    # ========================================================
+    # 결과 출력
+    # ========================================================
 
     print()
     print("=" * 70)
@@ -1005,19 +1587,26 @@ def start_meeting(
         f"{'완료' if team_results['turtle'] else '실패'}"
     )
 
-    # --------------------------------------------------------
-    # 회의 패키지 데이터 저장
-    # --------------------------------------------------------
+    # ========================================================
+    # 회의 패키지 저장
+    # ========================================================
 
     meeting_package = {
 
-        "request": parsed,
+        "request":
+            parsed,
 
-        "account_data": account_data,
+        "analysis_context":
+            analysis_context,
 
-        "team_results": team_results,
+        "account_data":
+            account_data,
 
-        "discussion_prompt": discussion_prompt,
+        "team_results":
+            team_results,
+
+        "discussion_prompt":
+            discussion_prompt,
 
         "timestamp":
             datetime.now().isoformat()
@@ -1046,10 +1635,9 @@ def start_meeting(
         f"📁 {meeting_package_path}"
     )
 
-    # --------------------------------------------------------
-    # 🐱 알프레도 (또는 메인 리더 AI) 호출
-    # 통합 회의 프롬프트(discussion_prompt)와 팀원 개별 결과를 전달
-    # --------------------------------------------------------
+    # ========================================================
+    # 🐱 알프레도
+    # ========================================================
 
     print()
     print("=" * 70)
@@ -1062,15 +1650,43 @@ def start_meeting(
         "cat"
     ]
 
-    # cat_module의 함수에 discussion_prompt를 함께 넘겨 가상 회의록을 작성하도록 함
-    if cat_module and hasattr(cat_module, "run_discussion"):
+    cat_result = None
 
-        cat_result = cat_module.run_discussion(
-            discussion_prompt=discussion_prompt,
-            team_results=team_results,
-            account_data=account_data,
-            parsed=parsed
+    if (
+        cat_module
+        and hasattr(
+            cat_module,
+            "run_discussion"
         )
+        and callable(
+            getattr(
+                cat_module,
+                "run_discussion"
+            )
+        )
+    ):
+
+        try:
+
+            cat_result = cat_module.run_discussion(
+                discussion_prompt=discussion_prompt,
+                team_results=team_results,
+                account_data=account_data,
+                parsed=parsed
+            )
+
+        except Exception as e:
+
+            print()
+            print(
+                "❌ 알프레도 run_discussion 오류"
+            )
+
+            print(
+                f"{type(e).__name__}: {e}"
+            )
+
+            cat_result = None
 
     else:
 
@@ -1101,6 +1717,7 @@ def main():
 
     print()
     print("=" * 70)
+
     print(
         "                 🏦 AI TRADING TEAM"
     )
@@ -1184,7 +1801,7 @@ def main():
         )
 
         # ====================================================
-        # 4 AI → 알프레도 (통합 회의 진행)
+        # ⭐ 회의 시작
         # ====================================================
 
         result = start_meeting(
