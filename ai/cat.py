@@ -5,6 +5,7 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 from google import genai
+from ai import ai_router
 
 
 # ============================================================
@@ -1265,7 +1266,7 @@ current_account.data를 우선한다.
     print()
 
 
-    response = client.models.generate_content(
+    response = ai_router.generate_content(
         model="gemini-3.6-flash",
         contents=prompt
     )

@@ -6,6 +6,7 @@ import pandas as pd
 import yfinance as yf
 from dotenv import load_dotenv
 from google import genai
+from ai import ai_router
 
 
 # ============================================================
@@ -1223,7 +1224,7 @@ USD cashBuyingPower가 0이라면
     print()
 
 
-    response = client.models.generate_content(
+    response = ai_router.generate_content(
         model="gemini-3.6-flash",
         contents=prompt
     )

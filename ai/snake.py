@@ -7,6 +7,7 @@ import pandas as pd
 import yfinance as yf
 from dotenv import load_dotenv
 from google import genai
+from ai import ai_router
 
 
 # ============================================================
@@ -951,7 +952,7 @@ MACD까지 상승한다면
     print()
 
     # 모델명을 정식 라인업 구문으로 지정 (gemini-3.6-flash)
-    response = client.models.generate_content(
+    response = ai_router.generate_content(
         model="gemini-3.6-flash", contents=prompt
     )
 
