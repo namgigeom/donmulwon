@@ -1,24 +1,20 @@
-# 환경변수 / API Key
+# ?�경변??/ API Key
 .env
 
 # Python
 __pycache__/
 *.pyc
-
-# 개인 포트폴리오 / 계좌 데이터
+# 개인 ?�트?�리??/ 계좌 ?�이??
 ai_portfolio.json
 portfolio_state.json
 portfolio_history.json
-
-# AI 개인 메모리
+# AI 개인 메모�?
 ai/memory.json
-
 # 개인 분석 기록
 ai/analysis_history/
-
-# 실시간 데이터
+# ?�시�??�이??
 market_data.json
 news_data.json
-
 # VS Code
 .vscode/
+.venv/
