@@ -17,9 +17,10 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 
-# Gemini 무료 한도는 매우 작으므로 실패 시 재시도하지 않고 즉시 OpenRouter로 넘긴다.
+# 무료 API가 막히면 즉시 fallback. 같은 요청을 오래 재시도하지 않는다.
 GEMINI_MAX_RETRIES = 0
-OPENROUTER_MAX_RETRIES = 1
+OPENROUTER_MAX_RETRIES = 0
+OPENROUTER_TIMEOUT_SECONDS = 30
 
 _gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
@@ -90,8 +91,13 @@ def _openrouter_generate(prompt, config=None, model=None):
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            data = json.loads(response.read().decode("utf-8"))
+        with urllib.request.urlopen(
+            request,
+            timeout=OPENROUTER_TIMEOUT_SECONDS
+        ) as response:
+            data = json.loads(
+                response.read().decode("utf-8")
+            )
 
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore")
@@ -100,12 +106,16 @@ def _openrouter_generate(prompt, config=None, model=None):
         )
 
     except Exception as exc:
-        raise AIRouterError(f"OpenRouter 요청 실패: {exc}")
+        raise AIRouterError(
+            f"OpenRouter 요청 실패: {exc}"
+        )
 
     choices = data.get("choices", [])
 
     if not choices:
-        raise AIRouterError("OpenRouter 응답에 choices가 없습니다.")
+        raise AIRouterError(
+            "OpenRouter 응답에 choices가 없습니다."
+        )
 
     message = choices[0].get("message", {})
     text = message.get("content", "")
@@ -118,7 +128,9 @@ def _openrouter_generate(prompt, config=None, model=None):
         )
 
     if not text:
-        raise AIRouterError("OpenRouter 응답 텍스트가 비어 있습니다.")
+        raise AIRouterError(
+            "OpenRouter 응답 텍스트가 비어 있습니다."
+        )
 
     return SimpleNamespace(text=text)
 
@@ -132,18 +144,19 @@ def generate_content(
     """
     Gemini 우선 → Gemini 실패 시 즉시 OpenRouter fallback.
 
-    기존 AI 모듈의 다음 호출 형식을 모두 지원한다.
+    기존 Google SDK 스타일의 다음 호출 형식을 모두 지원한다.
 
         generate_content(model="gemini-3.6-flash", contents=prompt)
         generate_content(prompt, config=config)
     """
 
-    # 기존 Google SDK 스타일의 contents 인자를 그대로 지원
     if prompt is None:
         prompt = contents
 
     if prompt is None:
-        raise AIRouterError("분석 프롬프트(contents)가 없습니다.")
+        raise AIRouterError(
+            "분석 프롬프트(contents)가 없습니다."
+        )
 
     # --------------------------------------------------------
     # 1. Gemini
@@ -157,7 +170,9 @@ def generate_content(
                 config=config,
                 model=model,
             )
-            print(f"🟢 Gemini 사용: {model or GEMINI_MODEL}")
+            print(
+                f"🟢 Gemini 사용: {model or GEMINI_MODEL}"
+            )
             return result
 
         except Exception as exc:
@@ -169,7 +184,9 @@ def generate_content(
     # --------------------------------------------------------
     # 2. Gemini 실패 → 즉시 OpenRouter
     # --------------------------------------------------------
-    print("🟡 Gemini 실패/한도 감지 → OpenRouter 자동 전환")
+    print(
+        "🟡 Gemini 실패/한도 감지 → OpenRouter 자동 전환"
+    )
 
     openrouter_error = None
 
@@ -180,7 +197,9 @@ def generate_content(
                 config=config,
                 model=None,
             )
-            print(f"🟢 OpenRouter 사용: {OPENROUTER_MODEL}")
+            print(
+                f"🟢 OpenRouter 사용: {OPENROUTER_MODEL}"
+            )
             return result
 
         except Exception as exc:
