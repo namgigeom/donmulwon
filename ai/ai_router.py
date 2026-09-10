@@ -17,10 +17,16 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 
-# 무료 API가 막히면 즉시 fallback. 같은 요청을 오래 재시도하지 않는다.
+# 토론은 호출 횟수가 많기 때문에 느린 무료 모델을 무작위로 고르지 않는다.
+# 독립 분석은 기존 openrouter/free를 유지하고, 재반박/토론은 빠른 무료 모델을 사용한다.
+OPENROUTER_DEBATE_MODEL = os.getenv(
+    "OPENROUTER_DEBATE_MODEL",
+    "nvidia/nemotron-3.5-lightning:free"
+)
+
 GEMINI_MAX_RETRIES = 0
 OPENROUTER_MAX_RETRIES = 0
-OPENROUTER_TIMEOUT_SECONDS = 30
+OPENROUTER_TIMEOUT_SECONDS = 20
 
 _gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
@@ -44,12 +50,34 @@ def _gemini_generate(prompt, config=None, model=None):
     return _gemini_client.models.generate_content(**kwargs)
 
 
+def _is_debate_prompt(prompt):
+    text = str(prompt or "")
+    markers = [
+        "ROUND 1",
+        "ROUND 2",
+        "재반박",
+        "재발언",
+        "첫 반박",
+        "반박",
+        "토론",
+        "다른 AI의 의견",
+        "서로의 의견",
+    ]
+    return any(marker in text for marker in markers)
+
+
 def _openrouter_generate(prompt, config=None, model=None):
     if not OPENROUTER_API_KEY:
         raise AIRouterError("OPENROUTER_API_KEY가 없습니다.")
 
+    selected_model = model or (
+        OPENROUTER_DEBATE_MODEL
+        if _is_debate_prompt(prompt)
+        else OPENROUTER_MODEL
+    )
+
     payload = {
-        "model": model or OPENROUTER_MODEL,
+        "model": selected_model,
         "messages": [
             {
                 "role": "system",
@@ -74,7 +102,11 @@ def _openrouter_generate(prompt, config=None, model=None):
             payload["temperature"] = temperature
 
         if max_output_tokens is not None:
-            payload["max_tokens"] = max_output_tokens
+            # 토론 발언은 장문이 필요 없으므로 무료 모델에서 과도한 생성 방지.
+            if _is_debate_prompt(prompt):
+                payload["max_tokens"] = min(int(max_output_tokens), 1200)
+            else:
+                payload["max_tokens"] = max_output_tokens
 
     body = json.dumps(payload).encode("utf-8")
 
@@ -144,8 +176,13 @@ def generate_content(
     """
     Gemini 우선 → Gemini 실패 시 즉시 OpenRouter fallback.
 
-    기존 Google SDK 스타일의 다음 호출 형식을 모두 지원한다.
+    독립 분석:
+        OPENROUTER_MODEL
 
+    토론/재반박:
+        OPENROUTER_DEBATE_MODEL
+
+    기존 Google SDK 스타일의 다음 호출 형식을 모두 지원한다.
         generate_content(model="gemini-3.6-flash", contents=prompt)
         generate_content(prompt, config=config)
     """
@@ -184,6 +221,12 @@ def generate_content(
     # --------------------------------------------------------
     # 2. Gemini 실패 → 즉시 OpenRouter
     # --------------------------------------------------------
+    selected_model = (
+        OPENROUTER_DEBATE_MODEL
+        if _is_debate_prompt(prompt)
+        else OPENROUTER_MODEL
+    )
+
     print(
         "🟡 Gemini 실패/한도 감지 → OpenRouter 자동 전환"
     )
@@ -198,7 +241,7 @@ def generate_content(
                 model=None,
             )
             print(
-                f"🟢 OpenRouter 사용: {OPENROUTER_MODEL}"
+                f"🟢 OpenRouter 사용: {selected_model}"
             )
             return result
 
