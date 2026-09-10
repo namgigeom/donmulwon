@@ -11,28 +11,25 @@ from datetime import datetime
 # 🏦 AI TRADING TEAM
 # 통합 투자 분석 시스템
 #
-# 실행 순서
+# main.py = 회의 진행자 / 오케스트레이터
 #
 # 사용자 질문
 #      ↓
-# main.py
+# 질문 파싱
 #      ↓
-# 토스 계좌정보 수집
+# 토스 계좌정보
 #      ↓
 # 🐦 김선달  → 펀더멘털 + 뉴스
-#      ↓
+
 # 🐍 이묵    → 기술적 분석
-#      ↓
+
 # 🦝 너부리  → 포트폴리오 + 계좌
-#      ↓
+
 # 🐢 현무    → 거시경제 + 시장환경
 #      ↓
-# 🐱 알프레도 → 원본 검증 + 교차검증 + 최종 판단
-#
-# ★ 중요
-# main.py는 "회의 진행자"다.
-# 각 AI가 자기 담당 영역을 벗어나지 않도록
-# 질문 / 분석유형 / 분석종목 / 계좌원본을 명확하게 전달한다.
+# ⚔️ 4인 토론
+#      ↓
+# 🐱 알프레도 → 검증 + 최종 판단
 # ============================================================
 
 
@@ -87,6 +84,92 @@ os.makedirs(
 MAX_AI_RETRIES = 3
 
 RETRY_WAIT_SECONDS = 3
+
+
+# ============================================================
+# 종목 데이터
+# ============================================================
+
+KNOWN_TICKERS = {
+
+    "REKR": "Rekor Systems",
+    "ALAB": "Astera Labs",
+    "VOO": "Vanguard S&P 500 ETF",
+    "TTWO": "Take-Two Interactive",
+    "JEPQ": "JPMorgan Nasdaq Equity Premium Income ETF",
+    "JOBY": "Joby Aviation",
+    "TSLA": "Tesla",
+    "NVDA": "NVIDIA",
+    "AAPL": "Apple",
+    "MSFT": "Microsoft",
+    "GOOGL": "Alphabet",
+    "AMZN": "Amazon",
+    "META": "Meta"
+}
+
+
+# ============================================================
+# 한글 / 일반명 → 티커 변환
+# ============================================================
+
+TICKER_ALIASES = {
+
+    # Joby
+    "조비": "JOBY",
+    "조비에비에이션": "JOBY",
+    "조비 에비에이션": "JOBY",
+    "joby aviation": "JOBY",
+
+    # Astera Labs
+    "아스테라": "ALAB",
+    "아스테라랩스": "ALAB",
+    "아스테라 랩스": "ALAB",
+    "astera labs": "ALAB",
+
+    # Rekor
+    "리코": "REKR",
+    "리커": "REKR",
+    "리코 시스템즈": "REKR",
+    "리코르": "REKR",
+    "rekor systems": "REKR",
+
+    # VOO
+    "브이오오": "VOO",
+    "s&p500": "VOO",
+    "s&p 500": "VOO",
+
+    # JEPQ
+    "제프큐": "JEPQ",
+    "제이이피큐": "JEPQ",
+
+    # Tesla
+    "테슬라": "TSLA",
+
+    # NVIDIA
+    "엔비디아": "NVDA",
+    "엔비디아": "NVDA",
+
+    # Apple
+    "애플": "AAPL",
+
+    # Microsoft
+    "마이크로소프트": "MSFT",
+    "마소": "MSFT",
+
+    # Alphabet
+    "알파벳": "GOOGL",
+    "구글": "GOOGL",
+
+    # Amazon
+    "아마존": "AMZN",
+
+    # Meta
+    "메타": "META",
+
+    # TTWO
+    "테이크투": "TTWO",
+    "테이크 투": "TTWO",
+}
 
 
 # ============================================================
@@ -162,49 +245,7 @@ def save_json(
         return False
 
 
-# ============================================================
-# 회의 데이터 저장
-# ============================================================
 
-def save_meeting_context(
-    parsed,
-    account_data
-):
-
-    filename = (
-        f"meeting_"
-        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        f".json"
-    )
-
-    filepath = os.path.join(
-        HISTORY_DIR,
-        filename
-    )
-
-    meeting_data = {
-
-        "request": parsed,
-
-        "account_data": account_data,
-
-        "created_at":
-            datetime.now().isoformat()
-    }
-
-    save_json(
-        filepath,
-        meeting_data
-    )
-
-    print()
-    print(
-        "💾 회의 컨텍스트 저장 완료"
-    )
-
-    print(
-        f"📁 {filepath}"
-    )
 
 
 # ============================================================
@@ -253,48 +294,14 @@ def get_user_question():
     ).strip()
 
 
-# ============================================================
-# 티커 후보
-# ============================================================
 
-KNOWN_TICKERS = {
-
-    "REKR": "Rekor Systems",
-
-    "ALAB": "Astera Labs",
-
-    "VOO": "Vanguard S&P 500 ETF",
-
-    "TTWO": "Take-Two Interactive",
-
-    "JEPQ":
-        "JPMorgan Nasdaq Equity Premium Income ETF",
-
-    "JOBY": "Joby Aviation",
-
-    "TSLA": "Tesla",
-
-    "NVDA": "NVIDIA",
-
-    "AAPL": "Apple",
-
-    "MSFT": "Microsoft",
-
-    "GOOGL": "Alphabet",
-
-    "AMZN": "Amazon",
-
-    "META": "Meta"
-}
 
 
 # ============================================================
 # 티커 추출
 # ============================================================
 
-def extract_tickers(
-    text
-):
+def extract_tickers(text):
 
     if not text:
 
@@ -304,6 +311,10 @@ def extract_tickers(
 
     found = []
 
+    # --------------------------------------------------------
+    # 1. 직접 티커 검색
+    # --------------------------------------------------------
+
     for ticker in KNOWN_TICKERS:
 
         if ticker in text_upper:
@@ -311,6 +322,24 @@ def extract_tickers(
             found.append(
                 ticker
             )
+
+    # --------------------------------------------------------
+    # 2. 한글 / 별칭 검색
+    # --------------------------------------------------------
+
+    text_lower = text.lower()
+
+    for alias, ticker in TICKER_ALIASES.items():
+
+        if alias.lower() in text_lower:
+
+            found.append(
+                ticker
+            )
+
+    # --------------------------------------------------------
+    # 중복 제거 + 순서 유지
+    # --------------------------------------------------------
 
     return list(
         dict.fromkeys(found)
@@ -335,7 +364,9 @@ def detect_intent(
     portfolio_keywords = [
 
         "내 계좌",
+        "내계좌",
         "내 포트폴리오",
+        "내포트폴리오",
         "계좌",
         "포트폴리오",
         "보유종목",
@@ -343,7 +374,10 @@ def detect_intent(
         "전체 자산",
         "비중",
         "내 자산",
-        "계좌 전체"
+        "계좌 전체",
+        "계좌상태",
+        "계좌 상태",
+        "자산 상태"
     ]
 
     market_keywords = [
@@ -372,9 +406,13 @@ def detect_intent(
         "진입",
         "팔까",
         "팔아",
+        "팔아야",
         "매도",
+        "얼마에 팔",
+        "얼마에팔",
         "손절",
-        "익절"
+        "익절",
+        "목표가"
     ]
 
     comparison_keywords = [
@@ -384,11 +422,12 @@ def detect_intent(
         "뭐가 좋아",
         "둘 중",
         "어느 게",
-        "어떤 게"
+        "어떤 게",
+        "어느쪽"
     ]
 
     # --------------------------------------------------------
-    # 계좌 질문
+    # 계좌 + 특정 종목
     # --------------------------------------------------------
 
     if any(
@@ -403,7 +442,7 @@ def detect_intent(
         return "portfolio"
 
     # --------------------------------------------------------
-    # 시장 질문
+    # 시장
     # --------------------------------------------------------
 
     if any(
@@ -414,7 +453,8 @@ def detect_intent(
         return "market"
 
     # --------------------------------------------------------
-    # 종목 비교
+    # 종목 2개 이상이면 비교
+    # 단, 계좌 질문이면 위에서 portfolio_stock 처리
     # --------------------------------------------------------
 
     if len(tickers) >= 2:
@@ -475,7 +515,9 @@ def parse_question(
             intent,
 
         "primary_ticker":
-            tickers[0] if tickers else None,
+            tickers[0]
+            if tickers
+            else None,
 
         "timestamp":
             datetime.now().isoformat()
@@ -508,8 +550,10 @@ def show_request(
     if parsed["tickers"]:
 
         print(
-            f"분석 종목   : "
-            f"{', '.join(parsed['tickers'])}"
+            "분석 종목   : "
+            + ", ".join(
+                parsed["tickers"]
+            )
         )
 
     else:
@@ -520,7 +564,7 @@ def show_request(
 
 
 # ============================================================
-# 토스 계좌정보 가져오기
+# 토스 계좌정보
 # ============================================================
 
 def get_account_data():
@@ -580,7 +624,7 @@ def get_account_data():
 
 
 # ============================================================
-# 계좌정보를 공통 원본으로 저장
+# 계좌정보 원본 저장
 # ============================================================
 
 def save_account_source(
@@ -606,7 +650,56 @@ def save_account_source(
 
 
 # ============================================================
-# 분석할 티커 결정
+# 회의 컨텍스트 저장
+# ============================================================
+
+def save_meeting_context(
+    parsed,
+    account_data
+):
+
+    filename = (
+        "meeting_"
+        + datetime.now().strftime(
+            "%Y%m%d_%H%M%S"
+        )
+        + ".json"
+    )
+
+    filepath = os.path.join(
+        HISTORY_DIR,
+        filename
+    )
+
+    meeting_data = {
+
+        "request":
+            parsed,
+
+        "account_data":
+            account_data,
+
+        "created_at":
+            datetime.now().isoformat()
+    }
+
+    save_json(
+        filepath,
+        meeting_data
+    )
+
+    print()
+    print(
+        "💾 회의 컨텍스트 저장 완료"
+    )
+
+    print(
+        f"📁 {filepath}"
+    )
+
+
+# ============================================================
+# 분석할 대표 티커
 # ============================================================
 
 def get_primary_ticker(
@@ -666,7 +759,7 @@ def find_analysis_function(
 
 
 # ============================================================
-# AI 프롬프트 가져오기
+# AI 프롬프트
 # ============================================================
 
 def get_ai_prompt(
@@ -720,7 +813,7 @@ def get_ai_prompt(
 
 
 # ============================================================
-# ⭐ AI에게 전달할 분석 컨텍스트 생성
+# AI 분석 컨텍스트
 # ============================================================
 
 def build_analysis_context(
@@ -750,8 +843,8 @@ def build_analysis_context(
 
     if tickers:
 
-        analysis_target = (
-            ", ".join(tickers)
+        analysis_target = ", ".join(
+            tickers
         )
 
     elif intent in [
@@ -771,7 +864,7 @@ def build_analysis_context(
         )
 
     # --------------------------------------------------------
-    # 명확한 지침
+    # 대상 지침
     # --------------------------------------------------------
 
     if intent == "portfolio":
@@ -781,8 +874,8 @@ def build_analysis_context(
 
 특정 종목을 질문한 것이 아니다.
 
-따라서 계좌 원본의 보유종목, 평가금액, 매수금액,
-손익, 비중, 현금 등을 중심으로 분석해야 한다.
+계좌 원본의 보유종목, 평가금액, 매수금액,
+손익, 비중, 현금 등을 중심으로 분석하라.
 
 계좌 원본에 없는 종목을 임의로 분석 대상으로 추가하지 마라.
 """
@@ -790,13 +883,29 @@ def build_analysis_context(
     elif intent == "portfolio_stock":
 
         target_instruction = f"""
-사용자는 계좌 전체를 보는 동시에
-특정 종목 {primary_ticker}에 대해서도 질문했다.
+사용자는 계좌 전체 상태와 함께 다음 종목을 명시적으로 질문했다.
 
-{primary_ticker}을 중심으로 분석하되,
-반드시 실제 계좌 내 보유수량/평가금액/비중과 연결해서 판단하라.
+분석 대상:
+{", ".join(tickers)}
 
-계좌 원본에 없는 종목을 임의로 추가하지 마라.
+계좌 전체의 상태를 확인하되,
+위 종목 각각에 대해 독립적으로 판단하라.
+
+특히 각 종목의:
+- 현재 가격
+- 평균 매수가
+- 보유 수량
+- 평가금액
+- 계좌 내 비중
+- 현재 손익
+- 매도 판단
+- 목표 매도가
+- 손절 기준
+
+을 계좌 상황과 연결해서 분석하라.
+
+사용자가 명시한 종목 외의 종목을
+주 분석 대상으로 임의 추가하지 마라.
 """
 
     elif intent in [
@@ -805,25 +914,31 @@ def build_analysis_context(
     ]:
 
         target_instruction = f"""
-사용자가 명시한 분석 종목은 {primary_ticker}이다.
+사용자가 명시한 분석 종목은 다음과 같다.
 
-이번 분석의 주 분석 대상은 반드시 {primary_ticker}이다.
+{", ".join(tickers)}
+
+이번 분석의 주 분석 대상은 반드시 위 종목들이다.
+
+각 종목을 개별적으로 분석하라.
 
 사용자가 언급하지 않은 다른 종목을
 주 분석 대상으로 바꾸지 마라.
 
-다른 종목을 언급할 필요가 있다면
-반드시 {primary_ticker}의 판단에 직접 필요한 경우에만
-보조적으로 언급하라.
+
 """
 
     elif intent == "comparison":
 
         target_instruction = f"""
-사용자가 비교 대상으로 지정한 종목은
-{", ".join(tickers)}이다.
+사용자가 비교 대상으로 지정한 종목은 다음과 같다.
 
-비교 대상 외의 종목을 임의로 주 분석 대상으로 추가하지 마라.
+{", ".join(tickers)}
+
+각 종목을 동일한 기준으로 비교하라.
+
+비교 대상 외의 종목을 임의로
+주 분석 대상으로 추가하지 마라.
 """
 
     elif intent == "market":
@@ -840,8 +955,10 @@ def build_analysis_context(
     else:
 
         target_instruction = """
-사용자 질문을 그대로 해석하고,
-질문에서 요구하지 않은 종목을 임의로 만들어 분석하지 마라.
+사용자 질문을 그대로 해석하라.
+
+질문에서 요구하지 않은 종목을
+임의로 만들어 분석하지 마라.
 """
 
     return {
@@ -873,7 +990,7 @@ def build_analysis_context(
 
 
 # ============================================================
-# ⭐ AI 호출
+# AI 호출
 # ============================================================
 
 def call_ai(
@@ -949,24 +1066,17 @@ def call_ai(
 
     # --------------------------------------------------------
     # ticker
-    #
-    # ★ 중요
-    # 종목이 없는 portfolio/market 질문에서는
-    # None을 무조건 넘기지 않는다.
-    #
-    # 해당 함수가 ticker를 요구하더라도
-    # 빈 문자열을 전달하여 None.upper() 오류를 방지한다.
+
+
     # --------------------------------------------------------
 
     if "ticker" in parameters:
 
-        if primary_ticker:
-
-            kwargs["ticker"] = primary_ticker
-
-        else:
-
-            kwargs["ticker"] = ""
+        kwargs["ticker"] = (
+            primary_ticker
+            if primary_ticker
+            else ""
+        )
 
     # --------------------------------------------------------
     # question
@@ -1002,9 +1112,7 @@ def call_ai(
 
     if "account_data" in parameters:
 
-        kwargs[
-            "account_data"
-        ] = account_data
+        kwargs["account_data"] = account_data
 
     # --------------------------------------------------------
     # portfolio_context
@@ -1012,9 +1120,7 @@ def call_ai(
 
     if "portfolio_context" in parameters:
 
-        kwargs[
-            "portfolio_context"
-        ] = account_data
+        kwargs["portfolio_context"] = account_data
 
     # --------------------------------------------------------
     # analysis_context
@@ -1022,9 +1128,7 @@ def call_ai(
 
     if "analysis_context" in parameters:
 
-        kwargs[
-            "analysis_context"
-        ] = analysis_context
+        kwargs["analysis_context"] = analysis_context
 
     # --------------------------------------------------------
     # context
@@ -1032,9 +1136,7 @@ def call_ai(
 
     if "context" in parameters:
 
-        kwargs[
-            "context"
-        ] = analysis_context
+        kwargs["context"] = analysis_context
 
     # --------------------------------------------------------
     # target_ticker
@@ -1042,9 +1144,7 @@ def call_ai(
 
     if "target_ticker" in parameters:
 
-        kwargs[
-            "target_ticker"
-        ] = primary_ticker
+        kwargs["target_ticker"] = primary_ticker
 
     # --------------------------------------------------------
     # tickers
@@ -1052,9 +1152,7 @@ def call_ai(
 
     if "tickers" in parameters:
 
-        kwargs[
-            "tickers"
-        ] = tickers
+        kwargs["tickers"] = tickers
 
     # --------------------------------------------------------
     # 출력
@@ -1069,16 +1167,20 @@ def call_ai(
 
     print("=" * 70)
 
-    if primary_ticker:
+    if tickers:
 
         print(
-            f"🎯 분석 대상: {', '.join(tickers)}"
+            "🎯 분석 대상: "
+            + ", ".join(tickers)
         )
 
     else:
 
         print(
-            f"🎯 분석 대상: {analysis_context['analysis_target']}"
+            "🎯 분석 대상: "
+            + analysis_context[
+                "analysis_target"
+            ]
         )
 
     print(
@@ -1086,10 +1188,10 @@ def call_ai(
     )
 
     # --------------------------------------------------------
-    # ★ 재시도
+    # 재시도
     # --------------------------------------------------------
 
-    last_error = None
+
 
     for attempt in range(
         1,
@@ -1125,7 +1227,7 @@ def call_ai(
 
         except TypeError as e:
 
-            last_error = e
+
 
             print(
                 f"⚠️ {ai_name} 인자 전달 오류"
@@ -1133,10 +1235,7 @@ def call_ai(
 
             print(e)
 
-            # ------------------------------------------------
-            # ★ 정말 인자 문제일 때만
-            # 인자 없는 함수 호출을 마지막 fallback으로 사용
-            # ------------------------------------------------
+
 
             if attempt == MAX_AI_RETRIES:
 
@@ -1146,9 +1245,7 @@ def call_ai(
                         f"🔄 {ai_name} 기본 호출 방식으로 재시도"
                     )
 
-                    result = function()
-
-                    return result
+                    return function()
 
                 except Exception as retry_error:
 
@@ -1165,7 +1262,7 @@ def call_ai(
 
         except Exception as e:
 
-            last_error = e
+
 
             error_text = str(
                 e
@@ -1175,9 +1272,7 @@ def call_ai(
                 e
             ).__name__.lower()
 
-            # ------------------------------------------------
-            # Gemini / API 일시적 오류
-            # ------------------------------------------------
+
 
             transient_error = any(
                 keyword in (
@@ -1213,9 +1308,7 @@ def call_ai(
 
                     continue
 
-            # ------------------------------------------------
-            # 일반 오류
-            # ------------------------------------------------
+
 
             print(
                 f"❌ {ai_name} 분석 중 오류"
@@ -1231,7 +1324,7 @@ def call_ai(
 
 
 # ============================================================
-# 분석 결과 확인
+# 결과 정규화
 # ============================================================
 
 def normalize_result(
@@ -1265,9 +1358,7 @@ def normalize_result(
         )
 
 
-# ============================================================
-# ⭐ 회의 시작
-# ============================================================
+
 
 # ============================================================
 # ⭐ 회의 시작
@@ -1279,9 +1370,7 @@ def start_meeting(
     account_data
 ):
 
-    ticker = get_primary_ticker(
-        parsed
-    )
+
 
     tickers = parsed.get(
         "tickers",
@@ -1305,9 +1394,11 @@ def start_meeting(
 
     print()
     print("=" * 70)
+
     print(
         "                 ⚔️ AI TRADING TEAM 회의"
     )
+
     print("=" * 70)
 
     print()
@@ -1315,7 +1406,8 @@ def start_meeting(
     if tickers:
 
         print(
-            f"🎯 분석 대상: {', '.join(tickers)}"
+            "🎯 분석 대상: "
+            + ", ".join(tickers)
         )
 
     else:
@@ -1368,19 +1460,18 @@ def start_meeting(
 
     # ========================================================
     # 1단계
-    # 기존 AI 4명 독립 분석
-    #
-    # ★ 이 부분은 기존과 동일
-    # ★ 캐릭터 파일 수정 없음
+    # 독립 분석
     # ========================================================
 
     print()
     print(
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     )
+
     print(
         "                 1️⃣ 독립 분석"
     )
+
     print(
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     )
@@ -1462,41 +1553,59 @@ def start_meeting(
     }
 
     # ========================================================
-    # 독립 분석 결과 출력
+    # 독립 분석 결과
     # ========================================================
 
     print()
     print("=" * 70)
+
     print(
         "                 📋 4명 독립 분석 완료"
     )
+
     print("=" * 70)
 
     print()
 
     print(
-        f"🐦 김선달 : "
-        f"{'완료' if team_results['crow'] else '실패'}"
+        "🐦 김선달 : "
+        + (
+            "완료"
+            if team_results["crow"]
+            else "실패"
+        )
     )
 
     print(
-        f"🐍 이묵   : "
-        f"{'완료' if team_results['snake'] else '실패'}"
+        "🐍 이묵   : "
+        + (
+            "완료"
+            if team_results["snake"]
+            else "실패"
+        )
     )
 
     print(
-        f"🦝 너부리 : "
-        f"{'완료' if team_results['raccoon'] else '실패'}"
+        "🦝 너부리 : "
+        + (
+            "완료"
+            if team_results["raccoon"]
+            else "실패"
+        )
     )
 
     print(
-        f"🐢 현무   : "
-        f"{'완료' if team_results['turtle'] else '실패'}"
+        "🐢 현무   : "
+        + (
+            "완료"
+            if team_results["turtle"]
+            else "실패"
+        )
     )
 
     # ========================================================
     # 3단계
-    # ⚔️ 4인 토론
+    # 4인 토론
     # ========================================================
 
     debate_result = None
@@ -1590,8 +1699,10 @@ def start_meeting(
         HISTORY_DIR,
         (
             "team_meeting_"
-            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            ".json"
+            + datetime.now().strftime(
+                "%Y%m%d_%H%M%S"
+            )
+            + ".json"
         )
     )
 
@@ -1612,15 +1723,16 @@ def start_meeting(
     # ========================================================
     # 5단계
     # 🐱 알프레도
-    #
-    # 독립 분석 + 토론 전체를 전달
+
     # ========================================================
 
     print()
     print("=" * 70)
+
     print(
         "                 🐱 알프레도 최종 검증"
     )
+
     print("=" * 70)
 
     cat_module = modules.get(
@@ -1630,7 +1742,7 @@ def start_meeting(
     cat_result = None
 
     # --------------------------------------------------------
-    # 알프레도에게 전달할 전체 회의 자료
+    # 전체 회의 자료
     # --------------------------------------------------------
 
     cat_context = {
@@ -1655,7 +1767,7 @@ def start_meeting(
     }
 
     # --------------------------------------------------------
-    # 기존 cat.py의 run_discussion()이 있으면 사용
+    # run_discussion
     # --------------------------------------------------------
 
     if (
@@ -1703,11 +1815,7 @@ def start_meeting(
             cat_result = None
 
     # --------------------------------------------------------
-    # run_discussion()이 없을 경우
-    #
-    # 기존 call_ai()를 이용하되
-    # 알프레도에게 회의 내용을 전달할 수 있도록
-    # parsed.question을 임시로 확장
+    # fallback
     # --------------------------------------------------------
 
     if cat_result is None:
@@ -1725,6 +1833,9 @@ def start_meeting(
 
 원래 사용자 질문:
 {question}
+
+사용자가 명시한 분석 종목:
+{", ".join(tickers) if tickers else "없음"}
 
 아래는 4명의 독립 분석과 토론 전체 내용이다.
 
@@ -1763,12 +1874,19 @@ def start_meeting(
 서로 충돌하는 주장은 원본 데이터와 사실관계를
 기준으로 검증하라.
 
-필요하면 특정 AI의 판단이 틀렸다고 명확하게 말하라.
+특정 종목이 여러 개라면 각각 별도로 판단하라.
+
+특히 사용자가 매도 가격을 요청했다면
+현재 가격, 실제 변동성, 기술적 지지/저항,
+기업 상황, 실적, 뉴스, 시장환경을 종합하여
+근거 있는 가격 구간을 제시하라.
+
+가격을 임의의 고정 퍼센트 규칙으로 정하지 마라.
 
 최종적으로 사용자에게 실제 도움이 되는
-하나의 결론을 내려라.
+명확한 결론을 내려라.
 
-최종 판단은 다음 중 가장 적절한 행동을 선택하라.
+가능한 최종 판단:
 
 - 매수
 - 추가매수
@@ -1810,8 +1928,10 @@ def start_meeting(
         HISTORY_DIR,
         (
             "final_meeting_"
-            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            ".json"
+            + datetime.now().strftime(
+                "%Y%m%d_%H%M%S"
+            )
+            + ".json"
         )
     )
 
@@ -1853,8 +1973,42 @@ def start_meeting(
     )
 
     # ========================================================
-    # 반환
+    # 최종 결과 출력
     # ========================================================
+
+    print()
+    print("=" * 70)
+
+    print(
+        "                 🐱 최종 분석 결과"
+    )
+
+    print("=" * 70)
+
+    print()
+
+    if cat_result:
+
+        print(
+            normalize_result(
+                cat_result
+            )
+        )
+
+    else:
+
+        print(
+            "❌ 알프레도 최종 결과가 없습니다."
+        )
+
+    print()
+    print("=" * 70)
+
+    print(
+        "                 🏦 회의 종료"
+    )
+
+    print("=" * 70)
 
     return {
 
@@ -1869,62 +2023,95 @@ def start_meeting(
                 cat_result
             )
     }
+
+
 # ============================================================
-# 메인 실행
+# 프로그램 시작
 # ============================================================
 
 def main():
 
     print()
     print("=" * 70)
+
     print(
         "                 🏦 AI TRADING TEAM"
     )
+
     print(
         "                 통합 투자 분석 시스템"
     )
+
     print("=" * 70)
 
-    # --------------------------------------------------------
-    # AI 모듈 준비
-    # --------------------------------------------------------
+
 
     print()
-    print("🔧 AI 모듈을 불러오는 중...")
+    print(
+        "🔧 AI 모듈을 불러오는 중..."
+    )
 
     modules = load_ai_modules()
 
     print()
-    print("📋 AI 모듈 상태")
+    print(
+        "📋 AI 모듈 상태"
+    )
 
-    module_names = {
-        "crow": "🐦 김선달",
-        "snake": "🐍 이묵",
-        "raccoon": "🦝 너부리",
-        "turtle": "🐢 현무",
-        "cat": "🐱 알프레도"
-    }
+    print(
+        "  "
+        + (
+            "✅"
+            if modules["crow"]
+            else "❌"
+        )
+        + " 🐦 김선달"
+    )
 
-    for key, name in module_names.items():
+    print(
+        "  "
+        + (
+            "✅"
+            if modules["snake"]
+            else "❌"
+        )
+        + " 🐍 이묵"
+    )
 
-        if modules.get(key) is not None:
+    print(
+        "  "
+        + (
+            "✅"
+            if modules["raccoon"]
+            else "❌"
+        )
+        + " 🦝 너부리"
+    )
 
-            print(
-                f"  ✅ {name}"
-            )
+    print(
+        "  "
+        + (
+            "✅"
+            if modules["turtle"]
+            else "❌"
+        )
+        + " 🐢 현무"
+    )
 
-        else:
-
-            print(
-                f"  ❌ {name}"
-            )
+    print(
+        "  "
+        + (
+            "✅"
+            if modules["cat"]
+            else "❌"
+        )
+        + " 🐱 알프레도"
+    )
 
     print()
     print("=" * 70)
 
-    # --------------------------------------------------------
-    # 질문 반복
-    # --------------------------------------------------------
+
 
     while True:
 
@@ -1932,34 +2119,15 @@ def main():
 
         if not question:
 
-            print()
+
+
             print(
                 "⚠️ 질문을 입력해주세요."
             )
 
             continue
 
-        # ----------------------------------------------------
-        # 종료
-        # ----------------------------------------------------
 
-        if question.lower() in [
-            "exit",
-            "quit",
-            "종료",
-            "나가기"
-        ]:
-
-            print()
-            print(
-                "🏦 AI TRADING TEAM을 종료합니다."
-            )
-
-            break
-
-        # ----------------------------------------------------
-        # 질문 분석
-        # ----------------------------------------------------
 
         parsed = parse_question(
             question
@@ -1969,98 +2137,34 @@ def main():
             parsed
         )
 
-        # ----------------------------------------------------
-        # 토스 계좌정보
-        # ----------------------------------------------------
+
 
         account_data = get_account_data()
 
-        # ----------------------------------------------------
-        # 공통 원본 저장
-        # ----------------------------------------------------
+
 
         save_account_source(
             account_data
         )
 
-        # ----------------------------------------------------
-        # 회의 요청 저장
-        # ----------------------------------------------------
+
 
         save_meeting_context(
             parsed,
             account_data
         )
 
-        # ----------------------------------------------------
-        # AI 회의
-        # ----------------------------------------------------
-
-        try:
-
-            result = start_meeting(
-                parsed,
-                modules,
-                account_data
-            )
-
-        except Exception as e:
-
-            print()
-            print("=" * 70)
-            print(
-                "❌ AI TRADING TEAM 회의 실행 오류"
-            )
-            print("=" * 70)
-
-            print(
-                f"{type(e).__name__}: {e}"
-            )
-
-            continue
-
-        # ----------------------------------------------------
-        # 최종 결과
-        # ----------------------------------------------------
-
-        print()
-        print("=" * 70)
-        print(
-            "                 🐱 최종 분석 결과"
-        )
-        print("=" * 70)
-
-        print()
-
-        cat_result = result.get(
-            "cat_result",
-            ""
+        start_meeting(
+            parsed,
+            modules,
+            account_data
         )
 
-        if cat_result:
 
-            print(
-                cat_result
-            )
-
-        else:
-
-            print(
-                "⚠️ 알프레도 최종 결과가 없습니다."
-            )
-
-        print()
-        print("=" * 70)
-        print(
-            "                 🏦 회의 종료"
-        )
-        print("=" * 70)
-
-        print()
 
 
 # ============================================================
-# 프로그램 시작점
+# 실행
 # ============================================================
 
 if __name__ == "__main__":
@@ -2079,11 +2183,11 @@ if __name__ == "__main__":
     except Exception as e:
 
         print()
-        print("=" * 70)
+
         print(
-            "❌ AI TRADING TEAM 실행 오류"
+            "❌ 프로그램 실행 중 치명적 오류"
         )
-        print("=" * 70)
+
 
         print(
             f"{type(e).__name__}: {e}"
