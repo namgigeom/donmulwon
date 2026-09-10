@@ -1,8 +1,10 @@
 import os
 import time
+import json
+import urllib.request
+import urllib.error
 from types import SimpleNamespace
 
-import requests
 from dotenv import load_dotenv
 from google import genai
 
@@ -13,10 +15,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
-OPENROUTER_MODEL = os.getenv(
-    "OPENROUTER_MODEL",
-    "google/gemini-2.5-flash"
-)
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 
 GEMINI_MAX_RETRIES = 1
 OPENROUTER_MAX_RETRIES = 2
@@ -31,15 +30,8 @@ class AIRouterError(Exception):
 def _is_fallback_error(exc):
     text = str(exc).lower()
     return any(token in text for token in [
-        "429",
-        "resource_exhausted",
-        "quota",
-        "503",
-        "502",
-        "504",
-        "unavailable",
-        "high demand",
-        "rate limit",
+        "429", "resource_exhausted", "quota", "503", "502", "504",
+        "unavailable", "high demand", "rate limit"
     ])
 
 
@@ -47,10 +39,7 @@ def _gemini_generate(prompt, config=None):
     if _gemini_client is None:
         raise AIRouterError("GEMINI_API_KEY가 없습니다.")
 
-    kwargs = {
-        "model": GEMINI_MODEL,
-        "contents": prompt,
-    }
+    kwargs = {"model": GEMINI_MODEL, "contents": prompt}
     if config is not None:
         kwargs["config"] = config
 
@@ -61,11 +50,13 @@ def _openrouter_generate(prompt, config=None):
     if not OPENROUTER_API_KEY:
         raise AIRouterError("OPENROUTER_API_KEY가 없습니다.")
 
-    system_text = "You are an AI investment analysis assistant. Answer in Korean unless the user explicitly requests another language."
     payload = {
         "model": OPENROUTER_MODEL,
         "messages": [
-            {"role": "system", "content": system_text},
+            {
+                "role": "system",
+                "content": "You are an AI investment analysis assistant. Answer in Korean unless explicitly requested otherwise."
+            },
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.2,
@@ -79,24 +70,28 @@ def _openrouter_generate(prompt, config=None):
         if max_output_tokens is not None:
             payload["max_tokens"] = max_output_tokens
 
-    response = requests.post(
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
+        data=body,
         headers={
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://github.com/namgigeom/donmulwon",
             "X-Title": "Donmulwon AI Trading Team",
         },
-        json=payload,
-        timeout=90,
+        method="POST",
     )
 
-    if response.status_code >= 400:
-        raise AIRouterError(
-            f"OpenRouter HTTP {response.status_code}: {response.text[:500]}"
-        )
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise AIRouterError(f"OpenRouter HTTP {exc.code}: {detail[:500]}")
+    except Exception as exc:
+        raise AIRouterError(f"OpenRouter 요청 실패: {exc}")
 
-    data = response.json()
     choices = data.get("choices", [])
     if not choices:
         raise AIRouterError("OpenRouter 응답에 choices가 없습니다.")
@@ -109,12 +104,7 @@ def _openrouter_generate(prompt, config=None):
 
 
 def generate_content(prompt, config=None):
-    """
-    1순위 Gemini
-    -> Gemini 429/503/502/504/quota 발생 시 즉시 OpenRouter
-    -> Gemini 일반 오류도 마지막에 OpenRouter를 시도
-    """
-
+    """Gemini 우선 → quota/429/503 등 발생 시 OpenRouter 자동 fallback."""
     gemini_error = None
 
     for attempt in range(GEMINI_MAX_RETRIES + 1):
@@ -129,7 +119,7 @@ def generate_content(prompt, config=None):
                 continue
             break
 
-    print("🟡 Gemini 사용 불가 → OpenRouter로 자동 전환")
+    print("🟡 Gemini 한도/장애 감지 → OpenRouter 자동 전환")
 
     openrouter_error = None
     for attempt in range(OPENROUTER_MAX_RETRIES + 1):
