@@ -1269,6 +1269,10 @@ def normalize_result(
 # ⭐ 회의 시작
 # ============================================================
 
+# ============================================================
+# ⭐ 회의 시작
+# ============================================================
+
 def start_meeting(
     parsed,
     modules,
@@ -1331,157 +1335,59 @@ def start_meeting(
     )
 
     print(
-        "🐦 김선달  → 펀더멘털 + 뉴스"
+        "🐦 김선달  → 독립 분석"
     )
 
     print(
-        "🐍 이묵    → 기술적 분석"
+        "🐍 이묵    → 독립 분석"
     )
 
     print(
-        "🦝 너부리  → 포트폴리오 + 계좌"
+        "🦝 너부리  → 독립 분석"
     )
 
     print(
-        "🐢 현무    → 거시경제 + 시장환경"
+        "🐢 현무    → 독립 분석"
     )
 
     print(
-        "🐱 알프레도 → 원본 검증 + 교차검증 + 회의 주관"
+        "          ↓"
+    )
+
+    print(
+        "⚔️ 4인 토론 → 서로 반박 / 재반박"
+    )
+
+    print(
+        "          ↓"
+    )
+
+    print(
+        "🐱 알프레도 → 회의 주관 / 검증 / 최종 판단"
     )
 
     # ========================================================
-    # ⭐ 각 AI 프롬프트
-    # ========================================================
-
-    crow_prompt = get_ai_prompt(
-        modules["crow"],
-        "🐦 김선달"
-    )
-
-    snake_prompt = get_ai_prompt(
-        modules["snake"],
-        "🐍 이묵"
-    )
-
-    raccoon_prompt = get_ai_prompt(
-        modules["raccoon"],
-        "🦝 너부리"
-    )
-
-    turtle_prompt = get_ai_prompt(
-        modules["turtle"],
-        "🐢 현무"
-    )
-
-    # ========================================================
-    # ⭐ 회의 프롬프트
-    # ========================================================
-
-    discussion_prompt = f"""
-[AI TRADING TEAM 실시간 투자 회의]
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[사용자 요청]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-사용자 질문:
-{question}
-
-분석 유형:
-{intent}
-
-명시된 분석 종목:
-{json.dumps(tickers, ensure_ascii=False)}
-
-주 분석 종목:
-{ticker if ticker else "없음"}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[분석 대상 통제 규칙]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-{analysis_context["target_instruction"]}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[현재 계좌 원본]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-{json.dumps(account_data, ensure_ascii=False, indent=2, default=str)}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[AI 패널]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🐦 김선달
-역할: 펀더멘털 + 뉴스
-
-{crow_prompt}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🐍 이묵
-역할: 기술적 분석
-
-{snake_prompt}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🦝 너부리
-역할: 포트폴리오 + 계좌
-
-{raccoon_prompt}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🐢 현무
-역할: 거시경제 + 시장환경
-
-{turtle_prompt}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[회의 규칙]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. 사용자 질문을 가장 먼저 기준으로 삼아라.
-
-2. 사용자가 특정 종목을 언급했다면
-   그 종목을 주 분석 대상으로 유지하라.
-
-3. 사용자가 계좌 전체를 물었다면
-   계좌 원본에 실제 존재하는 종목만 분석하라.
-
-4. 계좌 원본에 없는 종목을
-   임의로 분석 대상으로 끌어오지 마라.
-
-5. 이전 회의의 종목이나 과거 질문을
-   현재 질문보다 우선하지 마라.
-
-6. 확인되지 않은 숫자는 사실처럼 단정하지 마라.
-
-7. 원본 데이터와 AI의 주장이 다르면
-   원본 데이터를 우선하여 검증하라.
-
-8. 각 AI는 자기 담당 분야를 우선하라.
-
-9. 마지막에는 🐱 알프레도가
-   네 명의 의견과 원본 데이터를 교차검증한다.
-
-10. 최종 판단은 매수 / 매도 / 보유 / 관망 /
-    비중조절 중 가장 적절한 행동을 선택한다.
-"""
-
-    # ========================================================
-    # ⭐⭐⭐⭐⭐
-    # 실제 호출 순서
+    # 1단계
+    # 기존 AI 4명 독립 분석
     #
-    # 반드시
-    # 김선달 → 이묵 → 너부리 → 현무
+    # ★ 이 부분은 기존과 동일
+    # ★ 캐릭터 파일 수정 없음
     # ========================================================
 
     print()
     print(
-        "▶ 1단계: 🐦 김선달"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+    print(
+        "                 1️⃣ 독립 분석"
+    )
+    print(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+    print()
+    print(
+        "▶ 🐦 김선달"
     )
 
     crow_result = call_ai(
@@ -1493,7 +1399,7 @@ def start_meeting(
 
     print()
     print(
-        "▶ 2단계: 🐍 이묵"
+        "▶ 🐍 이묵"
     )
 
     snake_result = call_ai(
@@ -1505,7 +1411,7 @@ def start_meeting(
 
     print()
     print(
-        "▶ 3단계: 🦝 너부리"
+        "▶ 🦝 너부리"
     )
 
     raccoon_result = call_ai(
@@ -1517,7 +1423,7 @@ def start_meeting(
 
     print()
     print(
-        "▶ 4단계: 🐢 현무"
+        "▶ 🐢 현무"
     )
 
     turtle_result = call_ai(
@@ -1528,6 +1434,7 @@ def start_meeting(
     )
 
     # ========================================================
+    # 2단계
     # 결과 정규화
     # ========================================================
 
@@ -1555,13 +1462,13 @@ def start_meeting(
     }
 
     # ========================================================
-    # 결과 출력
+    # 독립 분석 결과 출력
     # ========================================================
 
     print()
     print("=" * 70)
     print(
-        "                 📋 4명 분석 완료"
+        "                 📋 4명 독립 분석 완료"
     )
     print("=" * 70)
 
@@ -1588,6 +1495,73 @@ def start_meeting(
     )
 
     # ========================================================
+    # 3단계
+    # ⚔️ 4인 토론
+    # ========================================================
+
+    debate_result = None
+
+    try:
+
+        debate_module = importlib.import_module(
+            "ai.debate"
+        )
+
+        print()
+        print(
+            "=" * 70
+        )
+
+        print(
+            "                 ⚔️ 4인 토론 시작"
+        )
+
+        print(
+            "=" * 70
+        )
+
+        debate_result = debate_module.run_debate(
+            modules=modules,
+            parsed=parsed,
+            account_data=account_data,
+            team_results=team_results
+        )
+
+    except Exception as e:
+
+        print()
+        print(
+            "❌ 토론 엔진 오류"
+        )
+
+        print(
+            f"{type(e).__name__}: {e}"
+        )
+
+        print(
+            "⚠️ 독립 분석 결과를 기반으로 알프레도에게 전달합니다."
+        )
+
+        debate_result = {
+
+            "original_question":
+                question,
+
+            "initial_results":
+                team_results,
+
+            "debate_results":
+                [],
+
+            "final_positions":
+                {},
+
+            "transcript":
+                ""
+        }
+
+    # ========================================================
+    # 4단계
     # 회의 패키지 저장
     # ========================================================
 
@@ -1605,8 +1579,8 @@ def start_meeting(
         "team_results":
             team_results,
 
-        "discussion_prompt":
-            discussion_prompt,
+        "debate":
+            debate_result,
 
         "timestamp":
             datetime.now().isoformat()
@@ -1628,7 +1602,7 @@ def start_meeting(
 
     print()
     print(
-        "💾 4명 AI 회의 프롬프트 및 데이터 저장 완료"
+        "💾 전체 회의 데이터 저장 완료"
     )
 
     print(
@@ -1636,21 +1610,53 @@ def start_meeting(
     )
 
     # ========================================================
+    # 5단계
     # 🐱 알프레도
+    #
+    # 독립 분석 + 토론 전체를 전달
     # ========================================================
 
     print()
     print("=" * 70)
     print(
-        "                 🐱 알프레도 회의 주관 & 검증 시작"
+        "                 🐱 알프레도 최종 검증"
     )
     print("=" * 70)
 
-    cat_module = modules[
+    cat_module = modules.get(
         "cat"
-    ]
+    )
 
     cat_result = None
+
+    # --------------------------------------------------------
+    # 알프레도에게 전달할 전체 회의 자료
+    # --------------------------------------------------------
+
+    cat_context = {
+
+        "user_question":
+            question,
+
+        "parsed":
+            parsed,
+
+        "analysis_context":
+            analysis_context,
+
+        "account_data":
+            account_data,
+
+        "initial_team_results":
+            team_results,
+
+        "debate":
+            debate_result
+    }
+
+    # --------------------------------------------------------
+    # 기존 cat.py의 run_discussion()이 있으면 사용
+    # --------------------------------------------------------
 
     if (
         cat_module
@@ -1669,9 +1675,17 @@ def start_meeting(
         try:
 
             cat_result = cat_module.run_discussion(
-                discussion_prompt=discussion_prompt,
+                discussion_prompt=json.dumps(
+                    cat_context,
+                    ensure_ascii=False,
+                    indent=2,
+                    default=str
+                ),
+
                 team_results=team_results,
+
                 account_data=account_data,
+
                 parsed=parsed
             )
 
@@ -1688,193 +1702,170 @@ def start_meeting(
 
             cat_result = None
 
-    else:
+    # --------------------------------------------------------
+    # run_discussion()이 없을 경우
+    #
+    # 기존 call_ai()를 이용하되
+    # 알프레도에게 회의 내용을 전달할 수 있도록
+    # parsed.question을 임시로 확장
+    # --------------------------------------------------------
 
-        cat_result = call_ai(
-            cat_module,
-            "🐱 알프레도",
-            parsed,
-            account_data
+    if cat_result is None:
+
+        try:
+
+            cat_parsed = dict(
+                parsed
+            )
+
+            cat_parsed[
+                "question"
+            ] = f"""
+[알프레도 최종판단 요청]
+
+원래 사용자 질문:
+{question}
+
+아래는 4명의 독립 분석과 토론 전체 내용이다.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[독립 분석]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{json.dumps(
+    team_results,
+    ensure_ascii=False,
+    indent=2,
+    default=str
+)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[토론 전체]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{json.dumps(
+    debate_result,
+    ensure_ascii=False,
+    indent=2,
+    default=str
+)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[알프레도 역할]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+너는 이 회의의 팀장이다.
+
+4명의 의견을 무조건 평균내지 마라.
+
+잘한 주장은 인정하고,
+근거가 약한 주장은 지적하고,
+서로 충돌하는 주장은 원본 데이터와 사실관계를
+기준으로 검증하라.
+
+필요하면 특정 AI의 판단이 틀렸다고 명확하게 말하라.
+
+최종적으로 사용자에게 실제 도움이 되는
+하나의 결론을 내려라.
+
+최종 판단은 다음 중 가장 적절한 행동을 선택하라.
+
+- 매수
+- 추가매수
+- 보유
+- 일부매도
+- 전량매도
+- 관망
+- 비중조절
+
+단순히 4명의 의견을 요약하지 말고
+팀장으로서 최종 결정을 내려라.
+"""
+
+            cat_result = call_ai(
+                cat_module,
+                "🐱 알프레도",
+                cat_parsed,
+                account_data
+            )
+
+        except Exception as e:
+
+            print()
+            print(
+                "❌ 알프레도 최종판단 오류"
+            )
+
+            print(
+                f"{type(e).__name__}: {e}"
+            )
+
+            cat_result = None
+
+    # ========================================================
+    # 최종 저장
+    # ========================================================
+
+    final_result_path = os.path.join(
+        HISTORY_DIR,
+        (
+            "final_meeting_"
+            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            ".json"
         )
+    )
+
+    final_data = {
+
+        "request":
+            parsed,
+
+        "account_data":
+            account_data,
+
+        "team_results":
+            team_results,
+
+        "debate":
+            debate_result,
+
+        "alfredo":
+            normalize_result(
+                cat_result
+            ),
+
+        "timestamp":
+            datetime.now().isoformat()
+    }
+
+    save_json(
+        final_result_path,
+        final_data
+    )
+
+    print()
+    print(
+        "💾 최종 회의록 저장 완료"
+    )
+
+    print(
+        f"📁 {final_result_path}"
+    )
+
+    # ========================================================
+    # 반환
+    # ========================================================
 
     return {
 
         "team_results":
             team_results,
 
+        "debate_result":
+            debate_result,
+
         "cat_result":
             normalize_result(
                 cat_result
             )
     }
-
-
-# ============================================================
-# 메인
-# ============================================================
-
-def main():
-
-    print()
-    print("=" * 70)
-
-    print(
-        "                 🏦 AI TRADING TEAM"
-    )
-
-    print(
-        "                 통합 투자 분석 시스템"
-    )
-
-    print("=" * 70)
-
-    # ========================================================
-    # AI 모듈 준비
-    # ========================================================
-
-    modules = load_ai_modules()
-
-    # ========================================================
-    # 질문 반복
-    # ========================================================
-
-    while True:
-
-        question = get_user_question()
-
-        if not question:
-
-            print()
-            print(
-                "⚠️ 질문을 입력해주세요."
-            )
-
-            continue
-
-        if question.lower() in [
-            "exit",
-            "quit",
-            "종료",
-            "나가기"
-        ]:
-
-            print()
-            print(
-                "🏦 AI TRADING TEAM을 종료합니다."
-            )
-
-            break
-
-        # ====================================================
-        # 질문 분석
-        # ====================================================
-
-        parsed = parse_question(
-            question
-        )
-
-        show_request(
-            parsed
-        )
-
-        # ====================================================
-        # 토스 계좌정보
-        # ====================================================
-
-        account_data = get_account_data()
-
-        # ====================================================
-        # 공통 원본 저장
-        # ====================================================
-
-        save_account_source(
-            account_data
-        )
-
-        # ====================================================
-        # 회의 요청 저장
-        # ====================================================
-
-        save_meeting_context(
-            parsed,
-            account_data
-        )
-
-        # ====================================================
-        # ⭐ 회의 시작
-        # ====================================================
-
-        result = start_meeting(
-            parsed,
-            modules,
-            account_data
-        )
-
-        # ====================================================
-        # 최종 결과 출력
-        # ====================================================
-
-        print()
-        print("=" * 70)
-        print(
-            "                 🐱 최종 분석 결과 & 회의록"
-        )
-        print("=" * 70)
-
-        print()
-
-        cat_result = result[
-            "cat_result"
-        ]
-
-        if cat_result:
-
-            print(
-                cat_result
-            )
-
-        else:
-
-            print(
-                "⚠️ 알프레도 최종 결과가 없습니다."
-            )
-
-        print()
-        print("=" * 70)
-        print(
-            "                 🏦 회의 종료"
-        )
-        print("=" * 70)
-
-        print()
-
-
-# ============================================================
-# 실행
-# ============================================================
-
-if __name__ == "__main__":
-
-    try:
-
-        main()
-
-    except KeyboardInterrupt:
-
-        print()
-        print(
-            "⚠️ 사용자가 프로그램을 종료했습니다."
-        )
-
-    except Exception as e:
-
-        print()
-        print("=" * 70)
-        print(
-            "❌ AI TRADING TEAM 실행 오류"
-        )
-        print("=" * 70)
-
-        print(
-            f"{type(e).__name__}: {e}"
-        )
