@@ -1,0 +1,6 @@
+google-genai==2.22.0
+yfinance==1.7.0
+pandas==3.0.5
+python-dotenv==1.2.3
+pyinstaller>=6.0
+requests>=2.31.0
