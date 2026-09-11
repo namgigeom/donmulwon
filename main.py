@@ -1,11 +1,17 @@
 import os
+import sys
 import json
 import importlib
 import time
 from datetime import datetime
 from dotenv import load_dotenv
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 개발 환경에서는 프로젝트 폴더, PyInstaller 실행 환경에서는 EXE가 있는 폴더를 기준으로 사용한다.
+if getattr(sys, "frozen", False):
+    BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 AI_DIR = os.path.join(BASE_DIR, "ai")
 HISTORY_DIR = os.path.join(AI_DIR, "analysis_history")
