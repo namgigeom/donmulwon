@@ -45,15 +45,12 @@ class AnalysisWorker(QObject):
             if isinstance(result, dict) and result.get("alfredo"):
                 text += "\n\n===== 🐱 알프레도 최종 판단 =====\n" + str(result["alfredo"])
             self.output.emit(text)
-            self.status.emit("분석 완료")
             self.finished.emit()
         except Exception:
             self.failed.emit(traceback.format_exc())
 
 
 class OfficeView(QGraphicsView):
-    PIXEL = 4
-
     def __init__(self):
         super().__init__()
         self.setScene(QGraphicsScene(self))
@@ -62,7 +59,7 @@ class OfficeView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setFrameShape(QFrame.NoFrame)
-        self.setBackgroundBrush(QBrush("#17191d"))
+        self.setBackgroundBrush(QBrush(QColor("#17191d")))
         self.draw_office()
 
     def rect(self, x, y, w, h, fill, stroke=None, width=1):
@@ -75,66 +72,87 @@ class OfficeView(QGraphicsView):
         pen.setWidth(width)
         return self.scene().addLine(x1, y1, x2, y2, pen)
 
-    def text(self, x, y, value, size=10, bold=False, color="#29271f", w=0):
-        item = self.scene().addText(value, QFont("Malgun Gothic", size, QFont.Bold if bold else QFont.Normal))
+    def text(self, x, y, value, size=10, bold=False, color="#29271f", width=0):
+        font = QFont("Malgun Gothic", size, QFont.Bold if bold else QFont.Normal)
+        item = self.scene().addText(value, font)
         item.setDefaultTextColor(QColor(color))
         item.setPos(x, y)
-        if w:
-            item.setTextWidth(w)
+        if width:
+            item.setTextWidth(width)
         return item
 
-    def pixel(self, x, y, w, h, color):
+    def px(self, x, y, w, h, color):
         return self.rect(x, y, w, h, color)
 
     def draw_office(self):
-        s = self.scene()
-        s.clear()
-        s.setSceneRect(0, 0, 1500, 760)
+        self.scene().clear()
+        self.scene().setSceneRect(0, 0, 1500, 760)
 
+        # Back wall.
         self.rect(20, 20, 1460, 330, "#252a2d", "#596269", 2)
         self.text(38, 35, "DONMULWON OFFICE  •  PIXEL OPERATIONS ROOM", 9, True, "#d9d1b8")
 
-        wx, wy, ww, wh = 170, 65, 1090, 235
+        # Large window: deliberately isolated from the exit area.
+        wx, wy, ww, wh = 195, 65, 1010, 235
         self.rect(wx, wy, ww, wh, "#9bb4bc", "#52636a", 3)
-        self.rect(wx + 3, wy + 3, ww - 6, 80, "#a9c7cf")
-        self.rect(wx + 3, wy + 83, ww - 6, 75, "#8fb0b8")
-        self.rect(wx + 3, wy + 158, ww - 6, 39, "#718b8f")
+        self.rect(wx + 3, wy + 3, ww - 6, 78, "#a9c7cf")
+        self.rect(wx + 3, wy + 81, ww - 6, 76, "#8fb0b8")
+        self.rect(wx + 3, wy + 157, ww - 6, 40, "#718b8f")
         buildings = [
-            (210, 205, 48, 50), (285, 184, 55, 71), (375, 213, 44, 42),
-            (455, 178, 64, 77), (560, 203, 48, 52), (640, 166, 62, 89),
-            (750, 196, 55, 59), (845, 177, 65, 78), (955, 204, 46, 51),
-            (1040, 185, 58, 70), (1135, 170, 57, 85), (1210, 203, 42, 52)
+            (225, 207, 44, 48), (290, 184, 54, 71), (368, 214, 42, 41),
+            (440, 179, 60, 76), (530, 202, 46, 53), (606, 167, 58, 88),
+            (690, 197, 53, 58), (772, 178, 63, 77), (870, 205, 45, 50),
+            (944, 184, 57, 71), (1032, 170, 55, 85), (1110, 204, 43, 51)
         ]
         for bx, by, bw, bh in buildings:
             self.rect(bx, by, bw, bh, "#59666a")
-            for wy2 in range(by + 10, by + bh - 5, 16):
-                for wx2 in range(bx + 8, bx + bw - 5, 15):
-                    self.rect(wx2, wy2, 5, 7, "#c9b77e")
+            for yy in range(by + 10, by + bh - 5, 16):
+                for xx in range(bx + 8, bx + bw - 5, 15):
+                    self.rect(xx, yy, 5, 7, "#c9b77e")
         self.rect(wx + 3, 255, ww - 6, 42, "#536966")
-        for i in range(1, 6):
-            x = wx + ww * i / 6
-            self.line(x, wy, x, wy + wh, "#52636a", 3)
+        for i in range(1, 5):
+            xx = wx + ww * i / 5
+            self.line(xx, wy, xx, wy + wh, "#52636a", 3)
         self.line(wx, 255, wx + ww, 255, "#465b5f", 2)
 
-        self.rect(38, 72, 108, 230, "#c9b99c", "#8c7a5e", 2)
-        self.rect(48, 82, 88, 210, "#30383a", "#161a1c", 3)
-        self.rect(57, 92, 70, 178, "#263033")
-        self.rect(68, 118, 48, 6, "#667478")
-        self.rect(121, 145, 6, 25, "#c49a54")
-        self.text(47, 307, "ENTRANCE", 8, True, "#d9d1b8")
+        # Exit is a wall sign, not a giant door beside the window.
+        ex, ey = 48, 90
+        self.rect(ex, ey, 118, 135, "#1c2528", "#53615f", 2)
+        self.rect(ex + 12, ey + 12, 94, 72, "#263538")
+        self.rect(ex + 31, ey + 28, 56, 32, "#6c9b76")
+        self.text(ex + 43, ey + 31, "EXIT", 13, True, "#edf2d8")
+        self.line(ex + 59, ey + 63, ex + 59, ey + 49, "#edf2d8", 3)
+        self.line(ex + 45, ey + 57, ex + 59, ey + 44, "#edf2d8", 3)
+        self.line(ex + 73, ey + 57, ex + 59, ey + 44, "#edf2d8", 3)
+        self.text(ex + 19, ey + 96, "EMERGENCY EXIT", 7, True, "#d9d1b8")
+        self.text(ex + 25, ey + 111, "→ STAFF AREA", 6, False, "#8e9b91")
 
-        px, py, pw, ph = 1290, 82, 170, 205
+        # Large market monitor, with generous chart bounds so nothing is clipped.
+        px, py, pw, ph = 1230, 55, 235, 245
         self.rect(px, py, pw, ph, "#20252a", "#a58b5b", 2)
-        self.text(px + 14, py + 12, "MARKET MONITOR", 10, True, "#e1d5b5")
-        self.text(px + 14, py + 35, "VOO  $612.40", 8, True, "#8cc39e")
-        self.text(px + 14, py + 50, "+1.84%", 8, True, "#8cc39e")
-        base = py + 150
-        vals = [20, 35, 27, 48, 39, 62, 45, 70, 54]
-        for i, v in enumerate(vals):
-            self.rect(px + 14 + i * 16, base - v, 9, v, "#668e78")
-        self.line(px + 12, base, px + pw - 12, base, "#6b6252", 1)
-        self.text(px + 14, base + 8, "1D PERFORMANCE", 7, False, "#9e957f")
-        self.text(px + 14, base + 27, "ACCOUNT  $1,124.19", 8, True, "#e1d5b5")
+        self.text(px + 15, py + 12, "MARKET MONITOR", 11, True, "#e1d5b5")
+        self.text(px + 15, py + 35, "VOO", 8, True, "#b6b09f")
+        self.text(px + 51, py + 34, "$612.40", 10, True, "#8cc39e")
+        self.text(px + 142, py + 36, "+1.84%", 8, True, "#8cc39e")
+
+        cx, cy, cw, ch = px + 16, py + 63, pw - 32, 105
+        self.rect(cx, cy, cw, ch, "#182023", "#46575a", 1)
+        for gy in (cy + 26, cy + 52, cy + 78):
+            self.line(cx + 5, gy, cx + cw - 5, gy, "#303c3e", 1)
+        values = [56, 51, 63, 59, 70, 65, 82, 76, 91, 84, 98, 90, 105, 99]
+        pts = []
+        for i, value in enumerate(values):
+            xx = cx + 8 + i * ((cw - 16) / (len(values) - 1))
+            yy = cy + ch - 8 - value * 0.72
+            pts.append((xx, yy))
+        for a, b in zip(pts, pts[1:]):
+            self.line(a[0], a[1], b[0], b[1], "#8cc39e", 3)
+        for xx, yy in pts:
+            self.rect(xx - 2, yy - 2, 4, 4, "#d7e3bd")
+        self.text(px + 16, py + 176, "1D PERFORMANCE", 7, True, "#8e9b91")
+        self.text(px + 16, py + 194, "ACCOUNT", 7, True, "#8e9b91")
+        self.text(px + 70, py + 191, "$1,124.19", 10, True, "#e1d5b5")
+        self.text(px + 16, py + 216, "VOL  1.24M   •   TREND  UP", 7, True, "#9e957f")
 
         self.rect(30, 330, 1440, 14, "#16191b")
 
@@ -146,21 +164,25 @@ class OfficeView(QGraphicsView):
             ("알프레도", "TEAM LEAD / VERIFIER", "#a26d42", "cat"),
         ]
         start_x, y, desk_w, gap = 45, 395, 270, 18
-        for i, (name, role, accent, kind) in enumerate(agents):
-            x = start_x + i * (desk_w + gap)
-            self.draw_desk(x, y, desk_w, name, role, accent, kind, i == 4)
+        for i, data in enumerate(agents):
+            self.draw_desk(start_x + i * (desk_w + gap), y, desk_w, *data, lead=(i == 4))
 
         self.text(35, 705, "5 AI AGENTS  •  PIXEL SUITS  •  INDIVIDUAL DESKS  •  LIVE ANALYSIS ROOM", 8, True, "#9e957f")
 
     def draw_desk(self, x, y, w, name, role, accent, kind, lead=False):
-        self.rect(x + w / 2 - 25, y + 132, 50, 60, "#292b2e", "#111315", 2)
-        self.rect(x + w / 2 - 34, y + 177, 68, 9, "#111315")
-        self.draw_character(x + w / 2, y + 10, kind, accent)
-        self.rect(x + 12, y + 98, w - 24, 72, "#15191b", "#a58b5b", 2)
-        self.rect(x + 25, y + 110, w - 50, 45, "#29383c")
-        self.rect(x + 35, y + 120, w - 70, 3, accent)
-        self.rect(x + 12, y + 172, w - 24, 18, accent)
-        self.rect(x + 12, y + 190, w - 24, 43, "#5a3f2c", "#33251c", 1)
+        # Chair behind the character.
+        self.rect(x + w / 2 - 27, y + 124, 54, 65, "#292b2e", "#111315", 2)
+        self.rect(x + w / 2 - 36, y + 177, 72, 9, "#111315")
+        self.draw_character(x + w / 2, y + 5, kind, accent)
+
+        # Desk + monitor.
+        self.rect(x + 10, y + 98, w - 20, 72, "#15191b", "#a58b5b", 2)
+        self.rect(x + 28, y + 109, w - 56, 48, "#29383c", "#53686b", 2)
+        self.rect(x + 39, y + 119, w - 78, 3, accent)
+        self.rect(x + 39, y + 129, w - 78, 3, "#52615e")
+        self.rect(x + 39, y + 139, w - 78, 3, "#52615e")
+        self.rect(x + 10, y + 172, w - 20, 18, accent)
+        self.rect(x + 10, y + 190, w - 20, 43, "#5a3f2c", "#33251c", 1)
         self.rect(x + 30, y + 233, 9, 50, "#29201a")
         self.rect(x + w - 39, y + 233, 9, 50, "#29201a")
         self.rect(x + 5, y + 283, w - 10, 8, "#191b1c")
@@ -172,87 +194,103 @@ class OfficeView(QGraphicsView):
             self.text(x + w - 83, y + 305, "LEAD", 6, True, "#fff1d0")
 
     def draw_character(self, cx, y, kind, accent):
+        # Small-pixel sprite: 3-5 px blocks, many individual marks.
         dark = "#1a1d20"
-        white = "#e7e0cf"
-        shirt = "#d8d2c2"
+        light = "#e7e0cf"
+        shirt = "#ded8c8"
         suit = accent
-        self.pixel(cx - 29, y + 46, 58, 42, suit)
-        self.pixel(cx - 18, y + 42, 36, 10, shirt)
-        self.pixel(cx - 4, y + 44, 8, 44, dark)
-        self.pixel(cx - 25, y + 55, 10, 28, suit)
-        self.pixel(cx + 15, y + 55, 10, 28, suit)
-        self.pixel(cx - 4, y + 51, 8, 13, dark)
-        self.pixel(cx - 6, y + 63, 12, 8, dark)
+        # Body / suit silhouette.
+        self.px(cx - 18, y + 48, 36, 30, suit)
+        self.px(cx - 13, y + 43, 26, 8, shirt)
+        self.px(cx - 3, y + 45, 6, 30, dark)
+        self.px(cx - 17, y + 54, 6, 21, suit)
+        self.px(cx + 11, y + 54, 6, 21, suit)
+        self.px(cx - 2, y + 49, 4, 10, "#25282b")
+        self.px(cx - 7, y + 75, 6, 5, dark)
+        self.px(cx + 1, y + 75, 6, 5, dark)
 
         if kind == "turtle":
-            skin = "#6d927d"
-            self.pixel(cx - 27, y + 9, 54, 40, skin)
-            self.pixel(cx - 32, y + 16, 9, 27, "#456b5e")
-            self.pixel(cx + 23, y + 16, 9, 27, "#456b5e")
-            self.pixel(cx - 27, y + 3, 54, 12, "#35544c")
-            self.pixel(cx - 20, y - 1, 40, 7, "#35544c")
-            self.pixel(cx - 17, y + 24, 9, 4, dark)
-            self.pixel(cx + 8, y + 24, 9, 4, dark)
-            self.pixel(cx - 7, y + 36, 14, 4, "#456b5e")
-            self.pixel(cx - 13, y + 12, 8, 4, "#8eaa91")
-            self.pixel(cx + 5, y + 12, 8, 4, "#8eaa91")
+            skin, shell, shade = "#78a087", "#36594f", "#507965"
+            self.px(cx - 17, y + 13, 34, 34, skin)
+            self.px(cx - 21, y + 20, 5, 17, shade)
+            self.px(cx + 16, y + 20, 5, 17, shade)
+            self.px(cx - 16, y + 7, 32, 8, shell)
+            self.px(cx - 11, y + 3, 22, 5, shell)
+            self.px(cx - 12, y + 17, 7, 5, "#b5c7a5")
+            self.px(cx + 5, y + 17, 7, 5, "#b5c7a5")
+            self.px(cx - 10, y + 23, 5, 5, dark)
+            self.px(cx + 5, y + 23, 5, 5, dark)
+            self.px(cx - 4, y + 31, 8, 4, shade)
+            self.px(cx - 7, y + 36, 14, 3, "#557a67")
 
         elif kind == "crow":
-            feather = "#303438"
-            self.pixel(cx - 28, y + 9, 56, 42, feather)
-            self.pixel(cx - 21, y + 1, 10, 16, "#1e2225")
-            self.pixel(cx - 8, y - 5, 9, 21, "#1e2225")
-            self.pixel(cx + 5, y + 1, 10, 16, "#1e2225")
-            self.pixel(cx - 19, y + 21, 14, 4, "#c2b99d")
-            self.pixel(cx + 5, y + 19, 14, 4, "#c2b99d")
-            self.pixel(cx - 16, y + 27, 7, 7, "#e4dcc5")
-            self.pixel(cx + 9, y + 27, 7, 7, "#e4dcc5")
-            self.pixel(cx - 14, y + 29, 4, 4, dark)
-            self.pixel(cx + 11, y + 29, 4, 4, dark)
-            self.pixel(cx + 24, y + 28, 18, 8, "#c18a45")
-            self.pixel(cx - 8, y + 39, 16, 4, "#a96e43")
+            feather, black = "#3a3e43", "#202326"
+            self.px(cx - 17, y + 13, 34, 34, feather)
+            self.px(cx - 13, y + 5, 7, 11, black)
+            self.px(cx - 3, y + 1, 7, 15, black)
+            self.px(cx + 7, y + 6, 7, 10, black)
+            self.px(cx - 10, y + 19, 7, 5, "#d8cfb2")
+            self.px(cx + 4, y + 19, 7, 5, "#d8cfb2")
+            self.px(cx - 8, y + 21, 4, 5, dark)
+            self.px(cx + 5, y + 21, 4, 5, dark)
+            self.px(cx + 16, y + 25, 13, 5, "#c18a45")
+            self.px(cx - 5, y + 31, 10, 3, "#b47448")
+            self.px(cx - 15, y + 39, 7, 5, black)
+            self.px(cx + 8, y + 39, 7, 5, black)
 
         elif kind == "snake":
-            snake = "#4e7658"
-            self.pixel(cx - 28, y + 8, 56, 43, snake)
-            self.pixel(cx - 20, y + 1, 14, 13, "#385740")
-            self.pixel(cx + 7, y + 1, 14, 13, "#385740")
-            self.pixel(cx - 18, y + 24, 8, 7, "#e8d7a2")
-            self.pixel(cx + 10, y + 24, 8, 7, "#e8d7a2")
-            self.pixel(cx - 15, y + 25, 4, 5, dark)
-            self.pixel(cx + 11, y + 25, 4, 5, dark)
-            self.pixel(cx - 3, y + 38, 6, 8, "#d46d68")
-            self.pixel(cx - 8, y + 44, 7, 3, "#d46d68")
-            self.pixel(cx + 1, y + 44, 7, 3, "#d46d68")
+            green, shade = "#527d5d", "#31553d"
+            self.px(cx - 17, y + 12, 34, 35, green)
+            self.px(cx - 12, y + 6, 9, 10, shade)
+            self.px(cx + 4, y + 5, 9, 11, shade)
+            self.px(cx - 11, y + 20, 7, 6, "#e4d49f")
+            self.px(cx + 4, y + 20, 7, 6, "#e4d49f")
+            self.px(cx - 9, y + 21, 4, 4, dark)
+            self.px(cx + 6, y + 21, 4, 4, dark)
+            self.px(cx - 3, y + 30, 6, 6, "#d76d70")
+            self.px(cx - 8, y + 36, 6, 3, "#d76d70")
+            self.px(cx + 2, y + 36, 6, 3, "#d76d70")
+            self.px(cx - 15, y + 41, 6, 4, shade)
+            self.px(cx + 9, y + 41, 6, 4, shade)
 
         elif kind == "raccoon":
-            fur = "#81766e"
-            self.pixel(cx - 27, y + 8, 54, 43, fur)
-            self.pixel(cx - 27, y + 2, 15, 13, dark)
-            self.pixel(cx + 12, y + 2, 15, 13, dark)
-            self.pixel(cx - 23, y + 22, 46, 16, "#3d4141")
-            self.pixel(cx - 16, y + 25, 8, 8, "#ddd0b0")
-            self.pixel(cx + 8, y + 25, 8, 8, "#ddd0b0")
-            self.pixel(cx - 13, y + 27, 4, 5, dark)
-            self.pixel(cx + 9, y + 27, 4, 5, dark)
-            self.pixel(cx - 5, y + 37, 10, 5, dark)
+            fur, mask = "#8b8077", "#454747"
+            self.px(cx - 17, y + 12, 34, 35, fur)
+            self.px(cx - 16, y + 5, 9, 10, mask)
+            self.px(cx + 7, y + 5, 9, 10, mask)
+            self.px(cx - 17, y + 21, 34, 12, mask)
+            self.px(cx - 10, y + 22, 7, 6, "#e2d5b5")
+            self.px(cx + 3, y + 22, 7, 6, "#e2d5b5")
+            self.px(cx - 8, y + 23, 4, 4, dark)
+            self.px(cx + 4, y + 23, 4, 4, dark)
+            self.px(cx - 4, y + 31, 8, 5, dark)
+            self.px(cx - 18, y + 38, 5, 8, mask)
+            self.px(cx + 13, y + 38, 5, 8, mask)
 
         else:
-            fur = "#c99770"
-            self.pixel(cx - 29, y + 9, 58, 41, fur)
-            self.pixel(cx - 27, y + 1, 16, 16, dark)
-            self.pixel(cx + 11, y + 1, 16, 16, dark)
-            self.pixel(cx - 21, y + 3, 42, 13, "#25282b")
-            # Alfredo's signature glasses.
-            self.pixel(cx - 18, y + 22, 16, 10, "#c9d0ca")
-            self.pixel(cx + 2, y + 22, 16, 10, "#c9d0ca")
-            self.pixel(cx - 3, y + 25, 6, 4, "#25282b")
-            self.pixel(cx - 12, y + 27, 5, 5, dark)
-            self.pixel(cx + 7, y + 27, 5, 5, dark)
-            self.pixel(cx - 7, y + 38, 14, 5, "#4d3025")
+            # Alfredo: cat + small glasses + neat team-lead suit.
+            fur, ear = "#c79770", "#6e493c"
+            self.px(cx - 18, y + 12, 36, 34, fur)
+            self.px(cx - 17, y + 4, 11, 12, ear)
+            self.px(cx + 6, y + 4, 11, 12, ear)
+            self.px(cx - 14, y + 7, 7, 7, fur)
+            self.px(cx + 7, y + 7, 7, 7, fur)
+            # glasses frames are intentionally pixel-thin.
+            self.px(cx - 13, y + 20, 11, 7, "#d6ddd7")
+            self.px(cx + 2, y + 20, 11, 7, "#d6ddd7")
+            self.px(cx - 2, y + 22, 4, 3, dark)
+            self.px(cx - 10, y + 22, 4, 4, dark)
+            self.px(cx + 6, y + 22, 4, 4, dark)
+            self.px(cx - 4, y + 31, 8, 4, "#58372d")
+            self.px(cx - 11, y + 38, 8, 4, fur)
+            self.px(cx + 3, y + 38, 8, 4, fur)
+            # Bow tie.
+            self.px(cx - 7, y + 46, 6, 5, "#2a2020")
+            self.px(cx + 1, y + 46, 6, 5, "#2a2020")
+            self.px(cx - 2, y + 47, 4, 4, "#d0a45d")
 
-        self.pixel(cx - 13, y + 45, 8, 7, white)
-        self.pixel(cx + 5, y + 45, 8, 7, white)
+        self.px(cx - 10, y + 48, 5, 5, light)
+        self.px(cx + 5, y + 48, 5, 5, light)
 
 
 class MainWindow(QMainWindow):
