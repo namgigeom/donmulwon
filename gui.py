@@ -57,7 +57,6 @@ class OfficeView(QGraphicsView):
     def __init__(self):
         super().__init__()
         self.setScene(QGraphicsScene(self))
-        # Pixel-art GUI: no smoothing/antialiasing.
         self.setRenderHint(QPainter.Antialiasing, False)
         self.setRenderHint(QPainter.SmoothPixmapTransform, False)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -80,7 +79,6 @@ class OfficeView(QGraphicsView):
         return item
 
     def pixel(self, x, y, w, h, color):
-        # All character art uses hard-edged rectangular pixels.
         return self.rect(x, y, w, h, color)
 
     def draw_office(self):
@@ -88,17 +86,14 @@ class OfficeView(QGraphicsView):
         s.clear()
         s.setSceneRect(0, 0, 1500, 760)
 
-        # Back wall / large window. Door and monitor remain physically detached.
         self.rect(20, 20, 1460, 330, "#252a2d", "#596269", 2)
         self.text(38, 35, "DONMULWON OFFICE  •  PIXEL OPERATIONS ROOM", 9, True, "#d9d1b8")
 
         wx, wy, ww, wh = 170, 65, 1090, 235
         self.rect(wx, wy, ww, wh, "#9bb4bc", "#52636a", 3)
-        # Sky bands.
         self.rect(wx + 3, wy + 3, ww - 6, 80, "#a9c7cf")
         self.rect(wx + 3, wy + 83, ww - 6, 75, "#8fb0b8")
         self.rect(wx + 3, wy + 158, ww - 6, 39, "#718b8f")
-        # Pixel skyline.
         buildings = [
             (210, 205, 48, 50), (285, 184, 55, 71), (375, 213, 44, 42),
             (455, 178, 64, 77), (560, 203, 48, 52), (640, 166, 62, 89),
@@ -111,13 +106,11 @@ class OfficeView(QGraphicsView):
                 for wx2 in range(x + 8, x + w - 5, 15):
                     self.rect(wx2, wy2, 5, 7, "#c9b77e")
         self.rect(wx + 3, 255, ww - 6, 42, "#536966")
-        # Window mullions.
         for i in range(1, 6):
             x = wx + ww * i / 6
             s.addLine(x, wy, x, wy + wh, QPen("#52636a", 3))
         s.addLine(wx, 255, wx + ww, 255, QPen("#465b5f", 2))
 
-        # Independent entrance door on left.
         self.rect(38, 72, 108, 230, "#c9b99c", "#8c7a5e", 2)
         self.rect(48, 82, 88, 210, "#30383a", "#161a1c", 3)
         self.rect(57, 92, 70, 178, "#263033")
@@ -125,7 +118,6 @@ class OfficeView(QGraphicsView):
         self.rect(121, 145, 6, 25, "#c49a54")
         self.text(47, 307, "ENTRANCE", 8, True, "#d9d1b8")
 
-        # Detached market monitor panel.
         px, py, pw, ph = 1290, 82, 170, 205
         self.rect(px, py, pw, ph, "#20252a", "#a58b5b", 2)
         self.text(px + 14, py + 12, "MARKET MONITOR", 10, True, "#e1d5b5")
@@ -141,10 +133,10 @@ class OfficeView(QGraphicsView):
 
         self.rect(30, 330, 1440, 14, "#16191b")
 
-        # Five individual workstations.
+        # 실제 AI 파일의 성격을 반영한 캐릭터 타입.
         agents = [
             ("현무", "MACRO", "#56766d", "turtle"),
-            ("김선달", "FUNDAMENTAL + NEWS", "#9a7947", "bird"),
+            ("김선달", "FUNDAMENTAL + NEWS", "#9a7947", "crow"),
             ("이묵", "TECHNICAL", "#426c83", "snake"),
             ("너부리", "PORTFOLIO + ACCOUNT", "#80634e", "raccoon"),
             ("알프레도", "TEAM LEAD / VERIFIER", "#a26d42", "cat"),
@@ -157,14 +149,9 @@ class OfficeView(QGraphicsView):
         self.text(35, 705, "5 AI AGENTS  •  PIXEL SUITS  •  INDIVIDUAL DESKS  •  LIVE ANALYSIS ROOM", 8, True, "#9e957f")
 
     def draw_desk(self, x, y, w, name, role, accent, kind, lead=False):
-        # Chair behind the agent.
         self.rect(x + w / 2 - 25, y + 132, 50, 60, "#292b2e", "#111315", 2)
         self.rect(x + w / 2 - 34, y + 177, 68, 9, "#111315")
-
-        # Character sits behind the desk.
         self.draw_character(x + w / 2, y + 10, kind, accent)
-
-        # Monitor, desk and front panel.
         self.rect(x + 12, y + 98, w - 24, 72, "#15191b", "#a58b5b", 2)
         self.rect(x + 25, y + 110, w - 50, 45, "#29383c")
         self.rect(x + 35, y + 120, w - 70, 3, accent)
@@ -173,8 +160,6 @@ class OfficeView(QGraphicsView):
         self.rect(x + 30, y + 233, 9, 50, "#29201a")
         self.rect(x + w - 39, y + 233, 9, 50, "#29201a")
         self.rect(x + 5, y + 283, w - 10, 8, "#191b1c")
-
-        # Nameplate.
         self.rect(x + 20, y + 298, w - 40, 29, "#20252a", "#695c48", 1)
         self.text(x + 31, y + 301, name, 10, True, "#eee5cc")
         self.text(x + 31, y + 315, role, 6, True, "#9e957f", w - 62)
@@ -183,82 +168,115 @@ class OfficeView(QGraphicsView):
             self.text(x + w - 83, y + 305, "LEAD", 6, True, "#fff1d0")
 
     def draw_character(self, cx, y, kind, accent):
-        # Pixel-art character dimensions: roughly 96x88, all hard rectangles.
-        skin = "#d6a57b"
         dark = "#1a1d20"
         white = "#e7e0cf"
         shirt = "#d8d2c2"
         suit = accent
-        # Body / suit.
+
+        # 공통 양복 몸통.
         self.pixel(cx - 29, y + 46, 58, 42, suit)
         self.pixel(cx - 18, y + 42, 36, 10, shirt)
         self.pixel(cx - 4, y + 44, 8, 44, dark)
         self.pixel(cx - 25, y + 55, 10, 28, suit)
         self.pixel(cx + 15, y + 55, 10, 28, suit)
-        # Tie.
         self.pixel(cx - 4, y + 51, 8, 13, dark)
         self.pixel(cx - 6, y + 63, 12, 8, dark)
-        # Head base.
-        self.pixel(cx - 27, y + 9, 54, 39, skin)
 
         if kind == "turtle":
-            # Turtle: shell/hood, small rounded ears, calm eyes.
-            self.pixel(cx - 31, y + 18, 8, 24, "#456b5e")
-            self.pixel(cx + 23, y + 18, 8, 24, "#456b5e")
-            self.pixel(cx - 25, y + 4, 50, 10, "#35544c")
-            self.pixel(cx - 20, y + 1, 40, 7, "#35544c")
-            self.pixel(cx - 16, y + 25, 7, 7, dark)
-            self.pixel(cx + 9, y + 25, 7, 7, dark)
-            self.pixel(cx - 7, y + 36, 14, 5, "#55796b")
-        elif kind == "bird":
-            # Bird: beak and feather crest, sharp energetic expression.
-            self.pixel(cx - 28, y + 12, 56, 38, "#b58a4d")
-            self.pixel(cx - 20, y + 3, 8, 13, "#8d683d")
-            self.pixel(cx - 11, y - 2, 8, 17, "#8d683d")
-            self.pixel(cx + 2, y - 5, 8, 20, "#8d683d")
-            self.pixel(cx + 18, y + 22, 16, 8, "#d7aa4f")
-            self.pixel(cx - 18, y + 24, 7, 7, dark)
-            self.pixel(cx + 11, y + 24, 7, 7, dark)
-            self.pixel(cx - 7, y + 36, 14, 4, "#694d35")
+            # 현무: 느긋하고 침착함. 무거운 등껍질과 처진 눈.
+            skin = "#6d927d"
+            self.pixel(cx - 27, y + 9, 54, 40, skin)
+            self.pixel(cx - 32, y + 16, 9, 27, "#456b5e")
+            self.pixel(cx + 23, y + 16, 9, 27, "#456b5e")
+            self.pixel(cx - 27, y + 3, 54, 12, "#35544c")
+            self.pixel(cx - 20, y - 1, 40, 7, "#35544c")
+            self.pixel(cx - 17, y + 24, 9, 4, dark)
+            self.pixel(cx + 8, y + 24, 9, 4, dark)
+            self.pixel(cx - 7, y + 36, 14, 4, "#456b5e")
+            # 작은 등껍질 무늬.
+            self.pixel(cx - 13, y + 12, 8, 4, "#8eaa91")
+            self.pixel(cx + 5, y + 12, 8, 4, "#8eaa91")
+
+        elif kind == "crow":
+            # 김선달: 말빨 좋고 자신감 넘치며 회의에 먼저 끼어드는 까마귀.
+            feather = "#303438"
+            self.pixel(cx - 28, y + 9, 56, 42, feather)
+            self.pixel(cx - 21, y + 1, 10, 16, "#1e2225")
+            self.pixel(cx - 8, y - 5, 9, 21, "#1e2225")
+            self.pixel(cx + 5, y + 1, 10, 16, "#1e2225")
+            # 자신만만하게 치켜뜬 눈썹.
+            self.pixel(cx - 19, y + 21, 14, 4, "#c2b99d")
+            self.pixel(cx + 5, y + 19, 14, 4, "#c2b99d")
+            self.pixel(cx - 16, y + 27, 7, 7, "#e4dcc5")
+            self.pixel(cx + 9, y + 27, 7, 7, "#e4dcc5")
+            self.pixel(cx - 14, y + 29, 4, 4, dark)
+            self.pixel(cx + 11, y + 29, 4, 4, dark)
+            # 말 많은 느낌의 큰 부리.
+            self.pixel(cx + 24, y + 28, 18, 8, "#c18a45")
+            self.pixel(cx - 8, y + 39, 16, 4, "#a96e43")
+            # 양복에 금빛 포인트.
+            self.pixel(cx + 20, y + 48, 6, 14, "#c18a45")
+
         elif kind == "snake":
-            # Snake: green head, angular eyes, small forked tongue.
+            # 이묵: 교활하고 빈틈을 노리는 이무기. 좁은 눈과 갈라진 혀.
             snake = "#4e7658"
-            self.pixel(cx - 28, y + 8, 56, 42, snake)
+            self.pixel(cx - 28, y + 8, 56, 43, snake)
             self.pixel(cx - 20, y + 1, 14, 13, "#385740")
             self.pixel(cx + 7, y + 1, 14, 13, "#385740")
-            self.pixel(cx - 18, y + 24, 8, 7, "#e8d7a2")
-            self.pixel(cx + 10, y + 24, 8, 7, "#e8d7a2")
-            self.pixel(cx - 15, y + 25, 4, 5, dark)
-            self.pixel(cx + 11, y + 25, 4, 5, dark)
-            self.pixel(cx - 3, y + 38, 6, 8, "#d46d68")
-            self.pixel(cx - 8, y + 44, 7, 3, "#d46d68")
-            self.pixel(cx + 1, y + 44, 7, 3, "#d46d68")
+            self.pixel(cx - 19, y + 22, 16, 4, dark)
+            self.pixel(cx + 3, y + 22, 16, 4, dark)
+            self.pixel(cx - 17, y + 26, 7, 6, "#e8d7a2")
+            self.pixel(cx + 10, y + 26, 7, 6, "#e8d7a2")
+            self.pixel(cx - 15, y + 27, 3, 4, dark)
+            self.pixel(cx + 11, y + 27, 3, 4, dark)
+            self.pixel(cx - 3, y + 37, 6, 9, "#d46d68")
+            self.pixel(cx - 9, y + 44, 8, 3, "#d46d68")
+            self.pixel(cx + 1, y + 44, 8, 3, "#d46d68")
+            # 비늘 포인트.
+            self.pixel(cx - 22, y + 15, 6, 5, "#779765")
+            self.pixel(cx + 16, y + 15, 6, 5, "#779765")
+
         elif kind == "raccoon":
-            # Raccoon: mask, rounded ears and mischievous smile.
+            # 너부리: 호전적이고 밀어붙이는 보노보노식 너부리. 마스크와 공격적인 눈.
             fur = "#81766e"
             self.pixel(cx - 27, y + 8, 54, 43, fur)
-            self.pixel(cx - 27, y + 2, 15, 13, dark)
-            self.pixel(cx + 12, y + 2, 15, 13, dark)
-            self.pixel(cx - 23, y + 22, 46, 16, "#3d4141")
-            self.pixel(cx - 16, y + 25, 8, 8, "#ddd0b0")
-            self.pixel(cx + 8, y + 25, 8, 8, "#ddd0b0")
-            self.pixel(cx - 13, y + 27, 4, 5, dark)
-            self.pixel(cx + 9, y + 27, 4, 5, dark)
-            self.pixel(cx - 5, y + 37, 10, 5, dark)
+            self.pixel(cx - 27, y + 2, 15, 13, "#655b55")
+            self.pixel(cx + 12, y + 2, 15, 13, "#655b55")
+            self.pixel(cx - 24, y + 20, 48, 18, "#363a3a")
+            self.pixel(cx - 18, y + 23, 10, 9, "#ddd0b0")
+            self.pixel(cx + 8, y + 23, 10, 9, "#ddd0b0")
+            self.pixel(cx - 15, y + 26, 5, 5, dark)
+            self.pixel(cx + 10, y + 26, 5, 5, dark)
+            # 화난 눈썹과 밀어붙이는 표정.
+            self.pixel(cx - 20, y + 18, 14, 4, dark)
+            self.pixel(cx + 6, y + 18, 14, 4, dark)
+            self.pixel(cx - 7, y + 37, 14, 5, "#302827")
+            # 꼬리/갈색 포인트.
+            self.pixel(cx + 27, y + 35, 13, 7, "#5f4a3e")
+            self.pixel(cx + 35, y + 42, 9, 7, "#2f2926")
+
         else:
-            # Alfredo: cat, slick hair, glasses and a confident lead expression.
-            self.pixel(cx - 29, y + 9, 58, 41, "#c99770")
+            # 알프레도: Alfred 모티브. 냉철한 팀장 + 안경 + 정장/보타이.
+            skin = "#c99770"
+            self.pixel(cx - 29, y + 9, 58, 41, skin)
             self.pixel(cx - 27, y + 1, 16, 16, dark)
             self.pixel(cx + 11, y + 1, 16, 16, dark)
             self.pixel(cx - 21, y + 3, 42, 13, "#25282b")
-            self.pixel(cx - 18, y + 22, 16, 10, "#c9d0ca")
-            self.pixel(cx + 2, y + 22, 16, 10, "#c9d0ca")
+            # 안경은 알프레도의 고정 시그니처.
+            self.pixel(cx - 20, y + 21, 18, 13, "#c9d0ca")
+            self.pixel(cx + 2, y + 21, 18, 13, "#c9d0ca")
             self.pixel(cx - 3, y + 25, 6, 4, "#25282b")
-            self.pixel(cx - 12, y + 27, 5, 5, dark)
-            self.pixel(cx + 7, y + 27, 5, 5, dark)
-            self.pixel(cx - 7, y + 38, 14, 5, "#4d3025")
+            self.pixel(cx - 13, y + 26, 5, 5, dark)
+            self.pixel(cx + 8, y + 26, 5, 5, dark)
+            self.pixel(cx - 7, y + 38, 14, 4, "#4d3025")
+            # 팀장용 단정한 보타이.
+            self.pixel(cx - 13, y + 49, 10, 8, suit)
+            self.pixel(cx + 3, y + 49, 10, 8, suit)
+            self.pixel(cx - 2, y + 50, 5, 6, "#d8b36a")
+            self.pixel(cx - 22, y + 48, 6, 14, "#111315")
+            self.pixel(cx + 16, y + 48, 6, 14, "#111315")
 
-        # White shirt collar pixels overlay the neck area.
+        # 공통 셔츠 칼라.
         self.pixel(cx - 13, y + 45, 8, 7, white)
         self.pixel(cx + 5, y + 45, 8, 7, white)
 
