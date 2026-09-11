@@ -1,0 +1,202 @@
+import inspect
+import json
+import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+ROLE_CONFIG = {
+    "crow": {"name": "🐦 김선달", "prompt_ticker": "target_ticker"},
+    "snake": {"name": "🐍 이묵", "prompt_ticker": "ticker"},
+    "raccoon": {"name": "🦝 너부리", "prompt_ticker": "target_ticker"},
+    "turtle": {"name": "🐢 현무", "prompt_ticker": "ticker"},
+}
+
+
+def _json(data):
+    return json.dumps(data, ensure_ascii=False, indent=2, default=str)
+
+
+def _extract_prompt(function):
+    """Extract the existing role prompt from analyze_stock/analyze_macro.
+
+    This intentionally reuses the character prompt already written in each AI
+    module instead of replacing it with a new generic prompt.
+    """
+    source = inspect.getsource(function)
+    match = re.search(r"prompt\s*=\s*f([\"']{3})(.*?)(?:\1)", source, re.S)
+    if not match:
+        raise RuntimeError("기존 AI 프롬프트를 추출하지 못했습니다.")
+    return match.group(2)
+
+
+def _render_prompt(template, ticker_label, data_text):
+    prompt = template
+    replacements = {
+        "{data_text}": data_text,
+        "{ticker}": ticker_label,
+        "{target_ticker}": ticker_label,
+    }
+    for key, value in replacements.items():
+        prompt = prompt.replace(key, value)
+    return prompt
+
+
+def _collect_role_data(module, role, tickers, account_data):
+    """Use the role module's existing data collectors once per ticker.
+
+    No AI call is made here. The collected payload is bundled and sent to the
+    role model once, so multi-stock questions do not multiply LLM calls.
+    """
+    memory = {}
+    try:
+        loader = getattr(module, "load_memory", None)
+        if callable(loader):
+            memory = loader()
+    except Exception:
+        memory = {}
+
+    if role == "crow":
+        collector = getattr(module, "collect_data", None)
+        if not callable(collector):
+            raise RuntimeError("김선달 collect_data를 찾지 못했습니다.")
+        return {
+            "role": role,
+            "requested_tickers": tickers,
+            "stocks": {t: collector(t) for t in tickers},
+            "memory": memory,
+            "portfolio_context": account_data,
+        }
+
+    if role == "snake":
+        collector = getattr(module, "get_market_data", None)
+        if not callable(collector):
+            raise RuntimeError("이묵 get_market_data를 찾지 못했습니다.")
+        return {
+            "role": role,
+            "requested_tickers": tickers,
+            "stocks": {t: collector(t) for t in tickers},
+            "memory": memory,
+            "portfolio_context": account_data,
+        }
+
+    if role == "raccoon":
+        analyze_portfolio = getattr(module, "analyze_portfolio", None)
+        find_holding = getattr(module, "find_holding", None)
+        get_market_context = getattr(module, "get_market_context", None)
+        get_stock_data = getattr(module, "get_stock_data", None)
+        if not all(callable(x) for x in (analyze_portfolio, find_holding, get_market_context, get_stock_data)):
+            raise RuntimeError("너부리의 계좌/시장 데이터 함수를 찾지 못했습니다.")
+        portfolio = analyze_portfolio(account_data)
+        market = get_market_context()
+        stocks = {}
+        for t in tickers:
+            stocks[t] = {
+                "holding": find_holding(account_data, t),
+                "stock_data": get_stock_data(t),
+            }
+        return {
+            "role": role,
+            "requested_tickers": tickers,
+            "stocks": stocks,
+            "market_data": market,
+            "portfolio_context": portfolio,
+            "memory": memory,
+        }
+
+    if role == "turtle":
+        get_market_data = getattr(module, "get_market_data", None)
+        get_market_trends = getattr(module, "get_market_trends", None)
+        get_stock_context = getattr(module, "get_stock_context", None)
+        if not all(callable(x) for x in (get_market_data, get_market_trends, get_stock_context)):
+            raise RuntimeError("현무의 시장 데이터 함수를 찾지 못했습니다.")
+        market = get_market_data()
+        trends = get_market_trends()
+        stocks = {t: get_stock_context(t) for t in tickers}
+        return {
+            "role": role,
+            "requested_tickers": tickers,
+            "market_data": market,
+            "market_trends": trends,
+            "stocks": stocks,
+            "memory": memory,
+        }
+
+    raise ValueError(f"지원하지 않는 role: {role}")
+
+
+def run_role_batch(module, role, tickers, account_data):
+    """Run one role once for all requested tickers."""
+    if module is None:
+        return None
+
+    if not tickers:
+        # Market/portfolio-only requests still need one call.
+        tickers = []
+
+    function_name = "analyze_macro" if role == "turtle" else "analyze_stock"
+    function = getattr(module, function_name, None)
+    if not callable(function):
+        raise RuntimeError(f"{role}의 {function_name} 함수를 찾지 못했습니다.")
+
+    data = _collect_role_data(module, role, tickers, account_data)
+    data_text = _json(data)
+    ticker_label = ", ".join(tickers) if tickers else "MARKET / PORTFOLIO"
+    template = _extract_prompt(function)
+    prompt = _render_prompt(template, ticker_label, data_text)
+
+    # Explicit batch instruction is appended without changing the existing
+    # character prompt. This makes the existing role prompt operate on all data.
+    prompt += f"""
+
+==================================================
+⚡ 돈물원 통합 분석 지시
+==================================================
+
+이번 회의의 분석 대상은 다음과 같다.
+{ticker_label}
+
+위 데이터에 포함된 모든 종목을 빠짐없이 구분해서 분석한다.
+종목별 결론을 섞지 않는다.
+데이터에 없는 수치를 만들지 않는다.
+사용자가 매도/손절/익절 가격을 요청했다면 고정 퍼센트가 아니라
+실제 변동성, 기술적 위치, 기업 상황, 시장환경, 계좌 상황을 근거로 판단한다.
+
+이 응답은 다른 팀원과 최종 팀장에게 전달된다.
+각 종목별로 가장 중요한 사실과 판단을 명확하게 구분한다.
+"""
+
+    router = getattr(module, "ai_router", None)
+    if router is None or not hasattr(router, "generate_content"):
+        raise RuntimeError(f"{role}의 ai_router를 찾지 못했습니다.")
+
+    response = router.generate_content(
+        model="gemini-3.6-flash",
+        contents=prompt,
+    )
+    return getattr(response, "text", str(response))
+
+
+def run_team_batches(modules, tickers, account_data, max_workers=4):
+    """Run the four independent roles concurrently, one LLM call per role."""
+    results = {}
+    jobs = {}
+    roles = [("crow", "🐦 김선달"), ("snake", "🐍 이묵"), ("raccoon", "🦝 너부리"), ("turtle", "🐢 현무")]
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for role, name in roles:
+            module = modules.get(role)
+            if module is None:
+                results[role] = None
+                continue
+            jobs[executor.submit(run_role_batch, module, role, tickers, account_data)] = (role, name)
+
+        for future in as_completed(jobs):
+            role, name = jobs[future]
+            try:
+                results[role] = future.result()
+                print(f"✅ {name} 통합 분석 완료")
+            except Exception as e:
+                print(f"❌ {name} 분석 실패: {type(e).__name__}: {e}")
+                results[role] = None
+
+    return results
