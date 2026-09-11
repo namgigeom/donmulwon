@@ -3,6 +3,8 @@ import json
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from ai.data_cache import get_or_fetch, stats as cache_stats
+
 
 ROLE_CONFIG = {
     "crow": {"name": "🐦 김선달", "prompt_ticker": "target_ticker"},
@@ -17,11 +19,7 @@ def _json(data):
 
 
 def _extract_prompt(function):
-    """Extract the existing role prompt from analyze_stock/analyze_macro.
-
-    This intentionally reuses the character prompt already written in each AI
-    module instead of replacing it with a new generic prompt.
-    """
+    """Extract the existing role prompt without replacing the character."""
     source = inspect.getsource(function)
     match = re.search(r"prompt\s*=\s*f([\"']{3})(.*?)(?:\1)", source, re.S)
     if not match:
@@ -41,12 +39,16 @@ def _render_prompt(template, ticker_label, data_text):
     return prompt
 
 
-def _collect_role_data(module, role, tickers, account_data):
-    """Use the role module's existing data collectors once per ticker.
+def _cached_call(namespace, value, function, *args):
+    return get_or_fetch(
+        namespace,
+        value,
+        lambda: function(*args),
+    )
 
-    No AI call is made here. The collected payload is bundled and sent to the
-    role model once, so multi-stock questions do not multiply LLM calls.
-    """
+
+def _collect_role_data(module, role, tickers, account_data):
+    """Collect role data while deduplicating identical requests in-session."""
     memory = {}
     try:
         loader = getattr(module, "load_memory", None)
@@ -59,10 +61,14 @@ def _collect_role_data(module, role, tickers, account_data):
         collector = getattr(module, "collect_data", None)
         if not callable(collector):
             raise RuntimeError("김선달 collect_data를 찾지 못했습니다.")
+        stocks = {
+            t: _cached_call("crow.collect_data", t, collector, t)
+            for t in tickers
+        }
         return {
             "role": role,
             "requested_tickers": tickers,
-            "stocks": {t: collector(t) for t in tickers},
+            "stocks": stocks,
             "memory": memory,
             "portfolio_context": account_data,
         }
@@ -71,10 +77,14 @@ def _collect_role_data(module, role, tickers, account_data):
         collector = getattr(module, "get_market_data", None)
         if not callable(collector):
             raise RuntimeError("이묵 get_market_data를 찾지 못했습니다.")
+        stocks = {
+            t: _cached_call("snake.get_market_data", t, collector, t)
+            for t in tickers
+        }
         return {
             "role": role,
             "requested_tickers": tickers,
-            "stocks": {t: collector(t) for t in tickers},
+            "stocks": stocks,
             "memory": memory,
             "portfolio_context": account_data,
         }
@@ -86,13 +96,36 @@ def _collect_role_data(module, role, tickers, account_data):
         get_stock_data = getattr(module, "get_stock_data", None)
         if not all(callable(x) for x in (analyze_portfolio, find_holding, get_market_context, get_stock_data)):
             raise RuntimeError("너부리의 계좌/시장 데이터 함수를 찾지 못했습니다.")
-        portfolio = analyze_portfolio(account_data)
-        market = get_market_context()
+
+        portfolio = _cached_call(
+            "raccoon.analyze_portfolio",
+            account_data,
+            analyze_portfolio,
+            account_data,
+        )
+        market = _cached_call(
+            "raccoon.get_market_context",
+            "current",
+            get_market_context,
+        )
         stocks = {}
         for t in tickers:
+            holding = _cached_call(
+                "raccoon.find_holding",
+                (id(account_data), t),
+                find_holding,
+                account_data,
+                t,
+            )
+            stock_data = _cached_call(
+                "raccoon.get_stock_data",
+                t,
+                get_stock_data,
+                t,
+            )
             stocks[t] = {
-                "holding": find_holding(account_data, t),
-                "stock_data": get_stock_data(t),
+                "holding": holding,
+                "stock_data": stock_data,
             }
         return {
             "role": role,
@@ -109,9 +142,26 @@ def _collect_role_data(module, role, tickers, account_data):
         get_stock_context = getattr(module, "get_stock_context", None)
         if not all(callable(x) for x in (get_market_data, get_market_trends, get_stock_context)):
             raise RuntimeError("현무의 시장 데이터 함수를 찾지 못했습니다.")
-        market = get_market_data()
-        trends = get_market_trends()
-        stocks = {t: get_stock_context(t) for t in tickers}
+
+        market = _cached_call(
+            "turtle.get_market_data",
+            "current",
+            get_market_data,
+        )
+        trends = _cached_call(
+            "turtle.get_market_trends",
+            "current",
+            get_market_trends,
+        )
+        stocks = {
+            t: _cached_call(
+                "turtle.get_stock_context",
+                t,
+                get_stock_context,
+                t,
+            )
+            for t in tickers
+        }
         return {
             "role": role,
             "requested_tickers": tickers,
@@ -125,13 +175,9 @@ def _collect_role_data(module, role, tickers, account_data):
 
 
 def run_role_batch(module, role, tickers, account_data):
-    """Run one role once for all requested tickers."""
+    """Run exactly one LLM request for one specialist and all requested tickers."""
     if module is None:
         return None
-
-    if not tickers:
-        # Market/portfolio-only requests still need one call.
-        tickers = []
 
     function_name = "analyze_macro" if role == "turtle" else "analyze_stock"
     function = getattr(module, function_name, None)
@@ -143,9 +189,6 @@ def run_role_batch(module, role, tickers, account_data):
     ticker_label = ", ".join(tickers) if tickers else "MARKET / PORTFOLIO"
     template = _extract_prompt(function)
     prompt = _render_prompt(template, ticker_label, data_text)
-
-    # Explicit batch instruction is appended without changing the existing
-    # character prompt. This makes the existing role prompt operate on all data.
     prompt += f"""
 
 ==================================================
@@ -177,7 +220,7 @@ def run_role_batch(module, role, tickers, account_data):
 
 
 def run_team_batches(modules, tickers, account_data, max_workers=4):
-    """Run the four independent roles concurrently, one LLM call per role."""
+    """Run four independent roles concurrently, one LLM call per role."""
     results = {}
     jobs = {}
     roles = [("crow", "🐦 김선달"), ("snake", "🐍 이묵"), ("raccoon", "🦝 너부리"), ("turtle", "🐢 현무")]
@@ -199,4 +242,6 @@ def run_team_batches(modules, tickers, account_data, max_workers=4):
                 print(f"❌ {name} 분석 실패: {type(e).__name__}: {e}")
                 results[role] = None
 
+    s = cache_stats()
+    print(f"📦 데이터 캐시: hit {s['hits']} / miss {s['misses']}")
     return results
