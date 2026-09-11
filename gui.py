@@ -5,7 +5,7 @@ import contextlib
 import traceback
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt
-from PySide6.QtGui import QFont, QPainter, QPen, QBrush
+from PySide6.QtGui import QFont, QPainter, QPen, QBrush, QColor
 from PySide6.QtWidgets import (
     QApplication, QFrame, QGraphicsScene, QGraphicsView, QHBoxLayout,
     QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QPlainTextEdit,
@@ -66,13 +66,18 @@ class OfficeView(QGraphicsView):
         self.draw_office()
 
     def rect(self, x, y, w, h, fill, stroke=None, width=1):
-        pen = QPen(stroke or fill)
+        pen = QPen(QColor(stroke or fill))
         pen.setWidth(width)
-        return self.scene().addRect(x, y, w, h, pen, QBrush(fill))
+        return self.scene().addRect(x, y, w, h, pen, QBrush(QColor(fill)))
 
-    def text(self, x, y, value, size=10, bold=False, color="#29271f", w=0, h=0):
+    def line(self, x1, y1, x2, y2, color, width=1):
+        pen = QPen(QColor(color))
+        pen.setWidth(width)
+        return self.scene().addLine(x1, y1, x2, y2, pen)
+
+    def text(self, x, y, value, size=10, bold=False, color="#29271f", w=0):
         item = self.scene().addText(value, QFont("Malgun Gothic", size, QFont.Bold if bold else QFont.Normal))
-        item.setDefaultTextColor(color)
+        item.setDefaultTextColor(QColor(color))
         item.setPos(x, y)
         if w:
             item.setTextWidth(w)
@@ -100,16 +105,16 @@ class OfficeView(QGraphicsView):
             (750, 196, 55, 59), (845, 177, 65, 78), (955, 204, 46, 51),
             (1040, 185, 58, 70), (1135, 170, 57, 85), (1210, 203, 42, 52)
         ]
-        for x, y, w, h in buildings:
-            self.rect(x, y, w, h, "#59666a")
-            for wy2 in range(y + 10, y + h - 5, 16):
-                for wx2 in range(x + 8, x + w - 5, 15):
+        for bx, by, bw, bh in buildings:
+            self.rect(bx, by, bw, bh, "#59666a")
+            for wy2 in range(by + 10, by + bh - 5, 16):
+                for wx2 in range(bx + 8, bx + bw - 5, 15):
                     self.rect(wx2, wy2, 5, 7, "#c9b77e")
         self.rect(wx + 3, 255, ww - 6, 42, "#536966")
         for i in range(1, 6):
             x = wx + ww * i / 6
-            s.addLine(x, wy, x, wy + wh, QPen("#52636a", 3))
-        s.addLine(wx, 255, wx + ww, 255, QPen("#465b5f", 2))
+            self.line(x, wy, x, wy + wh, "#52636a", 3)
+        self.line(wx, 255, wx + ww, 255, "#465b5f", 2)
 
         self.rect(38, 72, 108, 230, "#c9b99c", "#8c7a5e", 2)
         self.rect(48, 82, 88, 210, "#30383a", "#161a1c", 3)
@@ -127,13 +132,12 @@ class OfficeView(QGraphicsView):
         vals = [20, 35, 27, 48, 39, 62, 45, 70, 54]
         for i, v in enumerate(vals):
             self.rect(px + 14 + i * 16, base - v, 9, v, "#668e78")
-        s.addLine(px + 12, base, px + pw - 12, base, QPen("#6b6252", 1))
+        self.line(px + 12, base, px + pw - 12, base, "#6b6252", 1)
         self.text(px + 14, base + 8, "1D PERFORMANCE", 7, False, "#9e957f")
         self.text(px + 14, base + 27, "ACCOUNT  $1,124.19", 8, True, "#e1d5b5")
 
         self.rect(30, 330, 1440, 14, "#16191b")
 
-        # 실제 AI 파일의 성격을 반영한 캐릭터 타입.
         agents = [
             ("현무", "MACRO", "#56766d", "turtle"),
             ("김선달", "FUNDAMENTAL + NEWS", "#9a7947", "crow"),
@@ -172,8 +176,6 @@ class OfficeView(QGraphicsView):
         white = "#e7e0cf"
         shirt = "#d8d2c2"
         suit = accent
-
-        # 공통 양복 몸통.
         self.pixel(cx - 29, y + 46, 58, 42, suit)
         self.pixel(cx - 18, y + 42, 36, 10, shirt)
         self.pixel(cx - 4, y + 44, 8, 44, dark)
@@ -183,7 +185,6 @@ class OfficeView(QGraphicsView):
         self.pixel(cx - 6, y + 63, 12, 8, dark)
 
         if kind == "turtle":
-            # 현무: 느긋하고 침착함. 무거운 등껍질과 처진 눈.
             skin = "#6d927d"
             self.pixel(cx - 27, y + 9, 54, 40, skin)
             self.pixel(cx - 32, y + 16, 9, 27, "#456b5e")
@@ -193,90 +194,63 @@ class OfficeView(QGraphicsView):
             self.pixel(cx - 17, y + 24, 9, 4, dark)
             self.pixel(cx + 8, y + 24, 9, 4, dark)
             self.pixel(cx - 7, y + 36, 14, 4, "#456b5e")
-            # 작은 등껍질 무늬.
             self.pixel(cx - 13, y + 12, 8, 4, "#8eaa91")
             self.pixel(cx + 5, y + 12, 8, 4, "#8eaa91")
 
         elif kind == "crow":
-            # 김선달: 말빨 좋고 자신감 넘치며 회의에 먼저 끼어드는 까마귀.
             feather = "#303438"
             self.pixel(cx - 28, y + 9, 56, 42, feather)
             self.pixel(cx - 21, y + 1, 10, 16, "#1e2225")
             self.pixel(cx - 8, y - 5, 9, 21, "#1e2225")
             self.pixel(cx + 5, y + 1, 10, 16, "#1e2225")
-            # 자신만만하게 치켜뜬 눈썹.
             self.pixel(cx - 19, y + 21, 14, 4, "#c2b99d")
             self.pixel(cx + 5, y + 19, 14, 4, "#c2b99d")
             self.pixel(cx - 16, y + 27, 7, 7, "#e4dcc5")
             self.pixel(cx + 9, y + 27, 7, 7, "#e4dcc5")
             self.pixel(cx - 14, y + 29, 4, 4, dark)
             self.pixel(cx + 11, y + 29, 4, 4, dark)
-            # 말 많은 느낌의 큰 부리.
             self.pixel(cx + 24, y + 28, 18, 8, "#c18a45")
             self.pixel(cx - 8, y + 39, 16, 4, "#a96e43")
-            # 양복에 금빛 포인트.
-            self.pixel(cx + 20, y + 48, 6, 14, "#c18a45")
 
         elif kind == "snake":
-            # 이묵: 교활하고 빈틈을 노리는 이무기. 좁은 눈과 갈라진 혀.
             snake = "#4e7658"
             self.pixel(cx - 28, y + 8, 56, 43, snake)
             self.pixel(cx - 20, y + 1, 14, 13, "#385740")
             self.pixel(cx + 7, y + 1, 14, 13, "#385740")
-            self.pixel(cx - 19, y + 22, 16, 4, dark)
-            self.pixel(cx + 3, y + 22, 16, 4, dark)
-            self.pixel(cx - 17, y + 26, 7, 6, "#e8d7a2")
-            self.pixel(cx + 10, y + 26, 7, 6, "#e8d7a2")
-            self.pixel(cx - 15, y + 27, 3, 4, dark)
-            self.pixel(cx + 11, y + 27, 3, 4, dark)
-            self.pixel(cx - 3, y + 37, 6, 9, "#d46d68")
-            self.pixel(cx - 9, y + 44, 8, 3, "#d46d68")
-            self.pixel(cx + 1, y + 44, 8, 3, "#d46d68")
-            # 비늘 포인트.
-            self.pixel(cx - 22, y + 15, 6, 5, "#779765")
-            self.pixel(cx + 16, y + 15, 6, 5, "#779765")
+            self.pixel(cx - 18, y + 24, 8, 7, "#e8d7a2")
+            self.pixel(cx + 10, y + 24, 8, 7, "#e8d7a2")
+            self.pixel(cx - 15, y + 25, 4, 5, dark)
+            self.pixel(cx + 11, y + 25, 4, 5, dark)
+            self.pixel(cx - 3, y + 38, 6, 8, "#d46d68")
+            self.pixel(cx - 8, y + 44, 7, 3, "#d46d68")
+            self.pixel(cx + 1, y + 44, 7, 3, "#d46d68")
 
         elif kind == "raccoon":
-            # 너부리: 호전적이고 밀어붙이는 보노보노식 너부리. 마스크와 공격적인 눈.
             fur = "#81766e"
             self.pixel(cx - 27, y + 8, 54, 43, fur)
-            self.pixel(cx - 27, y + 2, 15, 13, "#655b55")
-            self.pixel(cx + 12, y + 2, 15, 13, "#655b55")
-            self.pixel(cx - 24, y + 20, 48, 18, "#363a3a")
-            self.pixel(cx - 18, y + 23, 10, 9, "#ddd0b0")
-            self.pixel(cx + 8, y + 23, 10, 9, "#ddd0b0")
-            self.pixel(cx - 15, y + 26, 5, 5, dark)
-            self.pixel(cx + 10, y + 26, 5, 5, dark)
-            # 화난 눈썹과 밀어붙이는 표정.
-            self.pixel(cx - 20, y + 18, 14, 4, dark)
-            self.pixel(cx + 6, y + 18, 14, 4, dark)
-            self.pixel(cx - 7, y + 37, 14, 5, "#302827")
-            # 꼬리/갈색 포인트.
-            self.pixel(cx + 27, y + 35, 13, 7, "#5f4a3e")
-            self.pixel(cx + 35, y + 42, 9, 7, "#2f2926")
+            self.pixel(cx - 27, y + 2, 15, 13, dark)
+            self.pixel(cx + 12, y + 2, 15, 13, dark)
+            self.pixel(cx - 23, y + 22, 46, 16, "#3d4141")
+            self.pixel(cx - 16, y + 25, 8, 8, "#ddd0b0")
+            self.pixel(cx + 8, y + 25, 8, 8, "#ddd0b0")
+            self.pixel(cx - 13, y + 27, 4, 5, dark)
+            self.pixel(cx + 9, y + 27, 4, 5, dark)
+            self.pixel(cx - 5, y + 37, 10, 5, dark)
 
         else:
-            # 알프레도: Alfred 모티브. 냉철한 팀장 + 안경 + 정장/보타이.
-            skin = "#c99770"
-            self.pixel(cx - 29, y + 9, 58, 41, skin)
+            fur = "#c99770"
+            self.pixel(cx - 29, y + 9, 58, 41, fur)
             self.pixel(cx - 27, y + 1, 16, 16, dark)
             self.pixel(cx + 11, y + 1, 16, 16, dark)
             self.pixel(cx - 21, y + 3, 42, 13, "#25282b")
-            # 안경은 알프레도의 고정 시그니처.
-            self.pixel(cx - 20, y + 21, 18, 13, "#c9d0ca")
-            self.pixel(cx + 2, y + 21, 18, 13, "#c9d0ca")
+            # Alfredo's signature glasses.
+            self.pixel(cx - 18, y + 22, 16, 10, "#c9d0ca")
+            self.pixel(cx + 2, y + 22, 16, 10, "#c9d0ca")
             self.pixel(cx - 3, y + 25, 6, 4, "#25282b")
-            self.pixel(cx - 13, y + 26, 5, 5, dark)
-            self.pixel(cx + 8, y + 26, 5, 5, dark)
-            self.pixel(cx - 7, y + 38, 14, 4, "#4d3025")
-            # 팀장용 단정한 보타이.
-            self.pixel(cx - 13, y + 49, 10, 8, suit)
-            self.pixel(cx + 3, y + 49, 10, 8, suit)
-            self.pixel(cx - 2, y + 50, 5, 6, "#d8b36a")
-            self.pixel(cx - 22, y + 48, 6, 14, "#111315")
-            self.pixel(cx + 16, y + 48, 6, 14, "#111315")
+            self.pixel(cx - 12, y + 27, 5, 5, dark)
+            self.pixel(cx + 7, y + 27, 5, 5, dark)
+            self.pixel(cx - 7, y + 38, 14, 5, "#4d3025")
 
-        # 공통 셔츠 칼라.
         self.pixel(cx - 13, y + 45, 8, 7, white)
         self.pixel(cx + 5, y + 45, 8, 7, white)
 
