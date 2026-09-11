@@ -20,6 +20,9 @@ TICKER_ALIASES = {"조비":"JOBY","조비에비에이션":"JOBY","조비 에비�
 def load_ai_modules():
     modules = {}
     original_key = os.environ.get("GEMINI_API_KEY")
+    # Some legacy role modules validate GEMINI_API_KEY during import even though
+    # their actual generation is routed through ai_router. A dummy value keeps
+    # import-time validation from blocking OpenRouter fallback.
     if not original_key:
         os.environ["GEMINI_API_KEY"] = "DUMMY_IMPORT_ONLY_KEY"
     try:
@@ -110,6 +113,12 @@ def get_account_data():
 
 def run_meeting(parsed, modules, account_data):
     from ai.batch_engine import run_team_batches
+    from ai.data_cache import clear as clear_data_cache
+
+    # A cache belongs to one user question only. This prevents a second
+    # question asked shortly afterward from receiving stale market data.
+    clear_data_cache()
+
     tickers = parsed.get("tickers",[])
     print("\n"+"="*70)
     print("⚔️ AI TRADING TEAM 회의")
