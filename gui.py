@@ -52,14 +52,18 @@ class AnalysisWorker(QObject):
 
 
 class OfficeView(QGraphicsView):
+    PIXEL = 4
+
     def __init__(self):
         super().__init__()
         self.setScene(QGraphicsScene(self))
-        self.setRenderHint(QPainter.Antialiasing)
+        # Pixel-art GUI: no smoothing/antialiasing.
+        self.setRenderHint(QPainter.Antialiasing, False)
+        self.setRenderHint(QPainter.SmoothPixmapTransform, False)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setFrameShape(QFrame.NoFrame)
-        self.setBackgroundBrush(QBrush("#e7dfc9"))
+        self.setBackgroundBrush(QBrush("#17191d"))
         self.draw_office()
 
     def rect(self, x, y, w, h, fill, stroke=None, width=1):
@@ -75,96 +79,188 @@ class OfficeView(QGraphicsView):
             item.setTextWidth(w)
         return item
 
+    def pixel(self, x, y, w, h, color):
+        # All character art uses hard-edged rectangular pixels.
+        return self.rect(x, y, w, h, color)
+
     def draw_office(self):
         s = self.scene()
         s.clear()
         s.setSceneRect(0, 0, 1500, 760)
 
-        # ------------------------------------------------------------
-        # 1. BACK WALL: window only. The door is NOT part of the window.
-        # ------------------------------------------------------------
-        self.rect(20, 20, 1460, 330, "#dbe6d8", "#557565", 2)
-        self.text(38, 35, "DONMULWON OFFICE  •  WINDOW VIEW", 9, True)
+        # Back wall / large window. Door and monitor remain physically detached.
+        self.rect(20, 20, 1460, 330, "#252a2d", "#596269", 2)
+        self.text(38, 35, "DONMULWON OFFICE  •  PIXEL OPERATIONS ROOM", 9, True, "#d9d1b8")
 
-        # Large rear window.
         wx, wy, ww, wh = 170, 65, 1090, 235
-        self.rect(wx, wy, ww, wh, "#cfe0d7", "#6b8675", 2)
+        self.rect(wx, wy, ww, wh, "#9bb4bc", "#52636a", 3)
+        # Sky bands.
+        self.rect(wx + 3, wy + 3, ww - 6, 80, "#a9c7cf")
+        self.rect(wx + 3, wy + 83, ww - 6, 75, "#8fb0b8")
+        self.rect(wx + 3, wy + 158, ww - 6, 39, "#718b8f")
+        # Pixel skyline.
+        buildings = [
+            (210, 205, 48, 50), (285, 184, 55, 71), (375, 213, 44, 42),
+            (455, 178, 64, 77), (560, 203, 48, 52), (640, 166, 62, 89),
+            (750, 196, 55, 59), (845, 177, 65, 78), (955, 204, 46, 51),
+            (1040, 185, 58, 70), (1135, 170, 57, 85), (1210, 203, 42, 52)
+        ]
+        for x, y, w, h in buildings:
+            self.rect(x, y, w, h, "#59666a")
+            for wy2 in range(y + 10, y + h - 5, 16):
+                for wx2 in range(x + 8, x + w - 5, 15):
+                    self.rect(wx2, wy2, 5, 7, "#c9b77e")
+        self.rect(wx + 3, 255, ww - 6, 42, "#536966")
+        # Window mullions.
         for i in range(1, 6):
             x = wx + ww * i / 6
-            s.addLine(x, wy, x, wy + wh, QPen("#718b7a", 2))
-        # Outside skyline / landscape.
-        self.rect(wx, 255, ww, 45, "#c6d1bf")
-        buildings = [(215, 210, 48, 45), (305, 190, 55, 65), (405, 205, 45, 50),
-                     (505, 180, 60, 75), (625, 205, 48, 50), (730, 170, 62, 85),
-                     (855, 198, 52, 57), (965, 185, 58, 70), (1080, 205, 45, 50),
-                     (1160, 175, 50, 80)]
-        for x, y, w, h in buildings:
-            self.rect(x, y, w, h, "#77746b")
-        s.addLine(wx, 255, wx + ww, 255, QPen("#6d806e", 2))
+            s.addLine(x, wy, x, wy + wh, QPen("#52636a", 3))
+        s.addLine(wx, 255, wx + ww, 255, QPen("#465b5f", 2))
 
-        # ------------------------------------------------------------
-        # 2. ENTRANCE: independent wall-mounted door, far left.
-        # ------------------------------------------------------------
-        self.rect(38, 72, 108, 230, "#f5eddb", "#806648", 2)
-        self.rect(48, 82, 88, 210, "#292d27", "#806648", 3)
-        s.addLine(62, 125, 122, 125, QPen("#a1afa4", 2))
-        self.rect(121, 145, 5, 25, "#b37835")
-        self.text(45, 308, "ENTRANCE", 8, True)
+        # Independent entrance door on left.
+        self.rect(38, 72, 108, 230, "#c9b99c", "#8c7a5e", 2)
+        self.rect(48, 82, 88, 210, "#30383a", "#161a1c", 3)
+        self.rect(57, 92, 70, 178, "#263033")
+        self.rect(68, 118, 48, 6, "#667478")
+        self.rect(121, 145, 6, 25, "#c49a54")
+        self.text(47, 307, "ENTRANCE", 8, True, "#d9d1b8")
 
-        # ------------------------------------------------------------
-        # 3. MARKET MONITOR: detached UI panel in front of the room.
-        #    It does not touch or sit on the window.
-        # ------------------------------------------------------------
+        # Detached market monitor panel.
         px, py, pw, ph = 1290, 82, 170, 205
-        self.rect(px, py, pw, ph, "#f7f0df", "#806a4c", 2)
-        self.text(px+14, py+12, "MARKET MONITOR", 11, True)
-        self.text(px+14, py+36, "VOO  $612.40  +1.84%", 8, True, "#557d67")
+        self.rect(px, py, pw, ph, "#20252a", "#a58b5b", 2)
+        self.text(px + 14, py + 12, "MARKET MONITOR", 10, True, "#e1d5b5")
+        self.text(px + 14, py + 35, "VOO  $612.40", 8, True, "#8cc39e")
+        self.text(px + 14, py + 50, "+1.84%", 8, True, "#8cc39e")
         base = py + 150
         vals = [20, 35, 27, 48, 39, 62, 45, 70, 54]
         for i, v in enumerate(vals):
-            self.rect(px+14+i*16, base-v, 9, v, "#557d67")
-        s.addLine(px+12, base, px+pw-12, base, QPen("#9a8d77", 1))
-        self.text(px+14, base+8, "1D PERFORMANCE", 7, False, "#817967")
-        self.text(px+14, base+27, "ACCOUNT  $1,124.19", 8, True)
+            self.rect(px + 14 + i * 16, base - v, 9, v, "#668e78")
+        s.addLine(px + 12, base, px + pw - 12, base, QPen("#6b6252", 1))
+        self.text(px + 14, base + 8, "1D PERFORMANCE", 7, False, "#9e957f")
+        self.text(px + 14, base + 27, "ACCOUNT  $1,124.19", 8, True, "#e1d5b5")
 
-        # Floor line.
-        self.rect(30, 330, 1440, 14, "#5d5140")
+        self.rect(30, 330, 1440, 14, "#16191b")
 
-        # ------------------------------------------------------------
-        # 4. FIVE INDIVIDUAL DESKS. Each agent has a separate station.
-        # ------------------------------------------------------------
+        # Five individual workstations.
         agents = [
-            ("🐢", "현무", "MACRO", "#617e74"),
-            ("🐦", "김선달", "FUNDAMENTAL + NEWS", "#7b704f"),
-            ("🐍", "이묵", "TECHNICAL", "#456b82"),
-            ("🦝", "너부리", "PORTFOLIO + ACCOUNT", "#6e594c"),
-            ("🐱", "알프레도", "TEAM LEAD / VERIFIER", "#8a6248"),
+            ("현무", "MACRO", "#56766d", "turtle"),
+            ("김선달", "FUNDAMENTAL + NEWS", "#9a7947", "bird"),
+            ("이묵", "TECHNICAL", "#426c83", "snake"),
+            ("너부리", "PORTFOLIO + ACCOUNT", "#80634e", "raccoon"),
+            ("알프레도", "TEAM LEAD / VERIFIER", "#a26d42", "cat"),
         ]
-        start_x, y, desk_w, gap = 45, 400, 270, 18
-        for i, (emoji, name, role, accent) in enumerate(agents):
+        start_x, y, desk_w, gap = 45, 395, 270, 18
+        for i, (name, role, accent, kind) in enumerate(agents):
             x = start_x + i * (desk_w + gap)
-            self.draw_desk(x, y, desk_w, emoji, name, role, accent, i == 4)
+            self.draw_desk(x, y, desk_w, name, role, accent, kind, i == 4)
 
-        self.text(35, 705, "5 AI AGENTS  •  INDIVIDUAL DESKS  •  FRONT OFFICE VIEW", 8, True, "#817967")
+        self.text(35, 705, "5 AI AGENTS  •  PIXEL SUITS  •  INDIVIDUAL DESKS  •  LIVE ANALYSIS ROOM", 8, True, "#9e957f")
 
-    def draw_desk(self, x, y, w, emoji, name, role, accent, lead=False):
-        # Monitor/nameplate.
-        self.rect(x+12, y, w-24, 78, "#f7f0df", "#2f2b22", 3)
-        self.text(x+25, y+13, f"{emoji}  {name}", 12, True)
-        self.text(x+25, y+39, role, 7, True, "#817967", w-50)
+    def draw_desk(self, x, y, w, name, role, accent, kind, lead=False):
+        # Chair behind the agent.
+        self.rect(x + w / 2 - 25, y + 132, 50, 60, "#292b2e", "#111315", 2)
+        self.rect(x + w / 2 - 34, y + 177, 68, 9, "#111315")
 
-        # Desktop + front panel.
-        self.rect(x+12, y+86, w-24, 18, accent)
-        self.rect(x+12, y+104, w-24, 48, "#725333", "#513b28", 1)
-        # Two legs = physical desk, clearly separated from the next desk.
-        self.rect(x+30, y+152, 8, 55, "#4b3929")
-        self.rect(x+w-38, y+152, 8, 55, "#4b3929")
+        # Character sits behind the desk.
+        self.draw_character(x + w / 2, y + 10, kind, accent)
 
-        # Chair behind the desk.
-        self.rect(x+w/2-24, y+154, 48, 25, accent)
-        self.rect(x+w/2-20, y+179, 40, 7, "#4b3929")
+        # Monitor, desk and front panel.
+        self.rect(x + 12, y + 98, w - 24, 72, "#15191b", "#a58b5b", 2)
+        self.rect(x + 25, y + 110, w - 50, 45, "#29383c")
+        self.rect(x + 35, y + 120, w - 70, 3, accent)
+        self.rect(x + 12, y + 172, w - 24, 18, accent)
+        self.rect(x + 12, y + 190, w - 24, 43, "#5a3f2c", "#33251c", 1)
+        self.rect(x + 30, y + 233, 9, 50, "#29201a")
+        self.rect(x + w - 39, y + 233, 9, 50, "#29201a")
+        self.rect(x + 5, y + 283, w - 10, 8, "#191b1c")
+
+        # Nameplate.
+        self.rect(x + 20, y + 298, w - 40, 29, "#20252a", "#695c48", 1)
+        self.text(x + 31, y + 301, name, 10, True, "#eee5cc")
+        self.text(x + 31, y + 315, role, 6, True, "#9e957f", w - 62)
         if lead:
-            self.text(x+92, y+112, "FINAL VERIFIER", 7, True, "#f7f0df")
+            self.rect(x + w - 88, y + 304, 55, 15, "#a26d42")
+            self.text(x + w - 83, y + 305, "LEAD", 6, True, "#fff1d0")
+
+    def draw_character(self, cx, y, kind, accent):
+        # Pixel-art character dimensions: roughly 96x88, all hard rectangles.
+        skin = "#d6a57b"
+        dark = "#1a1d20"
+        white = "#e7e0cf"
+        shirt = "#d8d2c2"
+        suit = accent
+        # Body / suit.
+        self.pixel(cx - 29, y + 46, 58, 42, suit)
+        self.pixel(cx - 18, y + 42, 36, 10, shirt)
+        self.pixel(cx - 4, y + 44, 8, 44, dark)
+        self.pixel(cx - 25, y + 55, 10, 28, suit)
+        self.pixel(cx + 15, y + 55, 10, 28, suit)
+        # Tie.
+        self.pixel(cx - 4, y + 51, 8, 13, dark)
+        self.pixel(cx - 6, y + 63, 12, 8, dark)
+        # Head base.
+        self.pixel(cx - 27, y + 9, 54, 39, skin)
+
+        if kind == "turtle":
+            # Turtle: shell/hood, small rounded ears, calm eyes.
+            self.pixel(cx - 31, y + 18, 8, 24, "#456b5e")
+            self.pixel(cx + 23, y + 18, 8, 24, "#456b5e")
+            self.pixel(cx - 25, y + 4, 50, 10, "#35544c")
+            self.pixel(cx - 20, y + 1, 40, 7, "#35544c")
+            self.pixel(cx - 16, y + 25, 7, 7, dark)
+            self.pixel(cx + 9, y + 25, 7, 7, dark)
+            self.pixel(cx - 7, y + 36, 14, 5, "#55796b")
+        elif kind == "bird":
+            # Bird: beak and feather crest, sharp energetic expression.
+            self.pixel(cx - 28, y + 12, 56, 38, "#b58a4d")
+            self.pixel(cx - 20, y + 3, 8, 13, "#8d683d")
+            self.pixel(cx - 11, y - 2, 8, 17, "#8d683d")
+            self.pixel(cx + 2, y - 5, 8, 20, "#8d683d")
+            self.pixel(cx + 18, y + 22, 16, 8, "#d7aa4f")
+            self.pixel(cx - 18, y + 24, 7, 7, dark)
+            self.pixel(cx + 11, y + 24, 7, 7, dark)
+            self.pixel(cx - 7, y + 36, 14, 4, "#694d35")
+        elif kind == "snake":
+            # Snake: green head, angular eyes, small forked tongue.
+            snake = "#4e7658"
+            self.pixel(cx - 28, y + 8, 56, 42, snake)
+            self.pixel(cx - 20, y + 1, 14, 13, "#385740")
+            self.pixel(cx + 7, y + 1, 14, 13, "#385740")
+            self.pixel(cx - 18, y + 24, 8, 7, "#e8d7a2")
+            self.pixel(cx + 10, y + 24, 8, 7, "#e8d7a2")
+            self.pixel(cx - 15, y + 25, 4, 5, dark)
+            self.pixel(cx + 11, y + 25, 4, 5, dark)
+            self.pixel(cx - 3, y + 38, 6, 8, "#d46d68")
+            self.pixel(cx - 8, y + 44, 7, 3, "#d46d68")
+            self.pixel(cx + 1, y + 44, 7, 3, "#d46d68")
+        elif kind == "raccoon":
+            # Raccoon: mask, rounded ears and mischievous smile.
+            fur = "#81766e"
+            self.pixel(cx - 27, y + 8, 54, 43, fur)
+            self.pixel(cx - 27, y + 2, 15, 13, dark)
+            self.pixel(cx + 12, y + 2, 15, 13, dark)
+            self.pixel(cx - 23, y + 22, 46, 16, "#3d4141")
+            self.pixel(cx - 16, y + 25, 8, 8, "#ddd0b0")
+            self.pixel(cx + 8, y + 25, 8, 8, "#ddd0b0")
+            self.pixel(cx - 13, y + 27, 4, 5, dark)
+            self.pixel(cx + 9, y + 27, 4, 5, dark)
+            self.pixel(cx - 5, y + 37, 10, 5, dark)
+        else:
+            # Alfredo: cat, slick hair, glasses and a confident lead expression.
+            self.pixel(cx - 29, y + 9, 58, 41, "#c99770")
+            self.pixel(cx - 27, y + 1, 16, 16, dark)
+            self.pixel(cx + 11, y + 1, 16, 16, dark)
+            self.pixel(cx - 21, y + 3, 42, 13, "#25282b")
+            self.pixel(cx - 18, y + 22, 16, 10, "#c9d0ca")
+            self.pixel(cx + 2, y + 22, 16, 10, "#c9d0ca")
+            self.pixel(cx - 3, y + 25, 6, 4, "#25282b")
+            self.pixel(cx - 12, y + 27, 5, 5, dark)
+            self.pixel(cx + 7, y + 27, 5, 5, dark)
+            self.pixel(cx - 7, y + 38, 14, 5, "#4d3025")
+
+        # White shirt collar pixels overlay the neck area.
+        self.pixel(cx - 13, y + 45, 8, 7, white)
+        self.pixel(cx + 5, y + 45, 8, 7, white)
 
 
 class MainWindow(QMainWindow):
@@ -187,7 +283,7 @@ class MainWindow(QMainWindow):
         brand = QVBoxLayout()
         logo = QLabel("돈물원  DONMULWON")
         logo.setObjectName("logo")
-        subtitle = QLabel("AI TRADING TEAM  •  LIVE")
+        subtitle = QLabel("AI TRADING TEAM  •  PIXEL OPERATIONS ROOM")
         subtitle.setObjectName("subtitle")
         brand.addWidget(logo)
         brand.addWidget(subtitle)
@@ -223,18 +319,18 @@ class MainWindow(QMainWindow):
 
     def styles(self):
         return """
-        QWidget { background:#e7dfc9; color:#29271f; font-family:'Malgun Gothic'; }
-        QMainWindow { background:#e7dfc9; }
-        QLabel#logo { font-size:22px; font-weight:800; }
-        QLabel#subtitle { color:#657462; font-size:10px; font-weight:700; }
-        QLabel#status { color:#557d67; font-size:10px; font-weight:800; }
-        QFrame#command { background:#302c24; border-radius:9px; }
-        QLineEdit { background:transparent; border:0; color:#f7f0df; padding:7px; font-size:12px; }
-        QLineEdit::placeholder { color:#aaa28f; }
-        QPushButton { background:#a86f31; color:white; border:0; border-radius:7px; padding:10px 20px; font-weight:800; }
-        QPushButton:disabled { background:#6b604e; }
-        QProgressBar { background:#c8bea8; border:0; border-radius:2px; }
-        QProgressBar::chunk { background:#557d67; border-radius:2px; }
+        QWidget { background:#17191d; color:#e8dfc9; font-family:'Malgun Gothic'; }
+        QMainWindow { background:#17191d; }
+        QLabel#logo { font-size:22px; font-weight:800; color:#eee5cc; }
+        QLabel#subtitle { color:#8e9b91; font-size:10px; font-weight:700; }
+        QLabel#status { color:#7eb392; font-size:10px; font-weight:800; }
+        QFrame#command { background:#22272b; border:1px solid #4b5356; border-radius:9px; }
+        QLineEdit { background:transparent; border:0; color:#f4ead0; padding:7px; font-size:12px; }
+        QLineEdit::placeholder { color:#777d7e; }
+        QPushButton { background:#9b6838; color:white; border:0; border-radius:7px; padding:10px 20px; font-weight:800; }
+        QPushButton:disabled { background:#4c4d49; }
+        QProgressBar { background:#353b3e; border:0; border-radius:2px; }
+        QProgressBar::chunk { background:#668e78; border-radius:2px; }
         """
 
     def start_analysis(self):
@@ -264,15 +360,13 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def show_result(self, text):
-        dialog = QFrame()
-        # Keep the main scene clean; result is a dedicated floating panel.
         self.result_window = QMainWindow(self)
         self.result_window.setWindowTitle("🐱 알프레도 · 최종 판단")
         self.result_window.resize(820, 650)
         editor = QPlainTextEdit()
         editor.setReadOnly(True)
         editor.setPlainText(text)
-        editor.setStyleSheet("background:#f7f0df; color:#29271f; padding:16px; font-size:12px;")
+        editor.setStyleSheet("background:#20252a; color:#eee5cc; padding:16px; font-size:12px;")
         self.result_window.setCentralWidget(editor)
         self.result_window.show()
 
