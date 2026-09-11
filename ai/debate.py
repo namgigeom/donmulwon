@@ -1,26 +1,25 @@
-import inspect
 import json
-import time
+
+from ai import ai_router
 
 
 # ============================================================
 # ⚔️ AI TRADING TEAM DEBATE ENGINE
 #
+# 기존 구조의 문제:
+#   4명 × ROUND 1 + 4명 × ROUND 2
+#   → 같은 AI를 다시 호출하면서 데이터도 재수집
+#
+# 변경 구조:
+#   4명 독립 분석 결과
+#          ↓
+#   통합 토론 AI 1회
+#
 # 중요:
-# 이 파일에서는 김선달 / 이묵 / 너부리 / 현무의
-# 캐릭터를 새로 정의하지 않는다.
-#
-# 각 AI의 기존 analyze_stock()을 다시 호출하면서
-# 회의 내용을 추가 전달한다.
-#
-# 따라서 기존 AI 파일에 작성된 말투 / 성격 / 사고방식 /
-# 분석 원칙은 그대로 유지된다.
+# 각 AI의 기존 캐릭터/전문 분야는 독립 분석 단계에서 유지한다.
+# 토론 단계에서는 이미 생성된 분석 결과만 전달하며,
+# 전문 AI를 다시 호출하지 않는다.
 # ============================================================
-
-
-MAX_DEBATE_RETRIES = 3
-RETRY_WAIT_SECONDS = 3
-
 
 AI_NAMES = {
     "crow": "🐦 김선달",
@@ -30,12 +29,7 @@ AI_NAMES = {
 }
 
 
-# ============================================================
-# 공통
-# ============================================================
-
 def normalize_result(result):
-
     if result is None:
         return ""
 
@@ -47,596 +41,285 @@ def normalize_result(result):
             result,
             ensure_ascii=False,
             indent=2,
-            default=str
+            default=str,
         )
-
     except Exception:
         return str(result)
 
 
-def find_analysis_function(module):
-
-    if module is None:
-        return None
-
-    candidates = [
-        "analyze_stock",
-        "analyze",
-        "analysis",
-        "run_analysis",
-    ]
-
-    for name in candidates:
-
-        function = getattr(
-            module,
-            name,
-            None
-        )
-
-        if callable(function):
-            return function
-
-    return None
-
-
-# ============================================================
-# AI 호출 인자 생성
-# ============================================================
-
-def build_kwargs(
-    function,
+def build_debate_prompt(
+    question,
     parsed,
     account_data,
-    debate_question
+    team_results,
 ):
+    """
+    이미 완료된 4명의 분석만 사용해서 한 번에 회의를 진행한다.
 
-    try:
+    다시 각 전문 AI의 analyze_stock()을 호출하지 않는다.
+    """
 
-        parameters = inspect.signature(
-            function
-        ).parameters
+    formatted_team = []
 
-    except Exception:
-
-        parameters = {}
-
-    tickers = parsed.get(
-        "tickers",
-        []
-    )
-
-    primary_ticker = (
-        tickers[0]
-        if tickers
-        else ""
-    )
-
-    intent = parsed.get(
-        "intent",
-        "general"
-    )
-
-    kwargs = {}
-
-    # --------------------------------------------------------
-    # ticker
-    # --------------------------------------------------------
-
-    if "ticker" in parameters:
-
-        kwargs["ticker"] = primary_ticker
-
-    # --------------------------------------------------------
-    # question
-    #
-    # 기존 AI가 question을 받는 경우
-    # 원래 질문 대신 회의용 질문을 전달한다.
-    # 기존 프롬프트는 AI 파일 내부에서 그대로 유지된다.
-    # --------------------------------------------------------
-
-    if "question" in parameters:
-
-        kwargs["question"] = debate_question
-
-    elif "user_question" in parameters:
-
-        kwargs["user_question"] = debate_question
-
-    # --------------------------------------------------------
-    # intent
-    # --------------------------------------------------------
-
-    if "intent" in parameters:
-
-        kwargs["intent"] = intent
-
-    # --------------------------------------------------------
-    # parsed
-    # --------------------------------------------------------
-
-    if "parsed" in parameters:
-
-        debate_parsed = dict(parsed)
-
-        debate_parsed[
-            "question"
-        ] = debate_question
-
-        kwargs["parsed"] = debate_parsed
-
-    # --------------------------------------------------------
-    # account
-    # --------------------------------------------------------
-
-    if "account_data" in parameters:
-
-        kwargs["account_data"] = account_data
-
-    if "portfolio_context" in parameters:
-
-        kwargs[
-            "portfolio_context"
-        ] = account_data
-
-    # --------------------------------------------------------
-    # context
-    # --------------------------------------------------------
-
-    if "context" in parameters:
-
-        kwargs["context"] = {
-            "question": debate_question,
-            "account_data": account_data,
-            "intent": intent,
-            "tickers": tickers,
-        }
-
-    # --------------------------------------------------------
-    # analysis_context
-    # --------------------------------------------------------
-
-    if "analysis_context" in parameters:
-
-        kwargs["analysis_context"] = {
-            "question": debate_question,
-            "account_data": account_data,
-            "intent": intent,
-            "tickers": tickers,
-            "primary_ticker": primary_ticker,
-        }
-
-    # --------------------------------------------------------
-    # target_ticker
-    # --------------------------------------------------------
-
-    if "target_ticker" in parameters:
-
-        kwargs[
-            "target_ticker"
-        ] = primary_ticker
-
-    # --------------------------------------------------------
-    # tickers
-    # --------------------------------------------------------
-
-    if "tickers" in parameters:
-
-        kwargs[
-            "tickers"
-        ] = tickers
-
-    return kwargs
-
-
-# ============================================================
-# 기존 AI를 이용한 토론 발언
-# ============================================================
-
-def call_existing_ai(
-    module,
-    ai_name,
-    parsed,
-    account_data,
-    debate_question
-):
-
-    if module is None:
-
-        return (
-            f"{ai_name}: 모듈을 불러오지 못했습니다."
+    for key, name in AI_NAMES.items():
+        result = normalize_result(
+            team_results.get(key, "")
         )
 
-    function = find_analysis_function(
-        module
-    )
-
-    if function is None:
-
-        return (
-            f"{ai_name}: 기존 분석 함수를 찾지 못했습니다."
+        formatted_team.append(
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{name}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{result}"
         )
 
-    kwargs = build_kwargs(
-        function,
-        parsed,
+    team_text = "\n\n".join(formatted_team)
+
+    account_text = json.dumps(
         account_data,
-        debate_question
+        ensure_ascii=False,
+        indent=2,
+        default=str,
     )
 
-    last_error = None
-
-    for attempt in range(
-        1,
-        MAX_DEBATE_RETRIES + 1
-    ):
-
-        try:
-
-            result = function(
-                **kwargs
-            )
-
-            return normalize_result(
-                result
-            )
-
-        except TypeError as e:
-
-            last_error = e
-
-            # 인자 문제라면 fallback
-            if attempt == MAX_DEBATE_RETRIES:
-
-                try:
-
-                    result = function()
-
-                    return normalize_result(
-                        result
-                    )
-
-                except Exception as fallback_error:
-
-                    return (
-                        f"{ai_name} 토론 발언 실패: "
-                        f"{type(fallback_error).__name__}: "
-                        f"{fallback_error}"
-                    )
-
-        except Exception as e:
-
-            last_error = e
-
-            error_text = (
-                str(e).lower()
-            )
-
-            transient = any(
-                keyword in error_text
-                for keyword in [
-                    "503",
-                    "429",
-                    "timeout",
-                    "unavailable",
-                    "resource exhausted",
-                    "rate limit",
-                    "temporarily",
-                    "deadline"
-                ]
-            )
-
-            if transient and attempt < MAX_DEBATE_RETRIES:
-
-                time.sleep(
-                    RETRY_WAIT_SECONDS
-                )
-
-                continue
-
-            return (
-                f"{ai_name} 토론 발언 실패: "
-                f"{type(e).__name__}: {e}"
-            )
-
-    return (
-        f"{ai_name} 토론 발언 실패: "
-        f"{last_error}"
+    parsed_text = json.dumps(
+        parsed,
+        ensure_ascii=False,
+        indent=2,
+        default=str,
     )
-
-
-# ============================================================
-# 토론용 질문 생성
-# ============================================================
-
-def make_debate_question(
-    original_question,
-    current_agent,
-    transcript,
-    round_number
-):
 
     return f"""
-[AI TRADING TEAM 공식 회의 - {round_number}라운드]
+너는 🏦 돈물원 AI 투자팀의 공식 회의 진행 AI다.
 
-너는 기존의 너의 역할과 성격을 그대로 유지한다.
+이번 단계에서는 새로운 시장 데이터를 수집하거나
+전문 AI를 다시 호출하지 않는다.
+
+이미 완료된 네 명의 독립 분석 결과를 바탕으로
+한 번의 통합 회의를 진행한다.
+
+==================================================
+[사용자 질문]
+==================================================
+{question}
+
+==================================================
+[질문 정보]
+==================================================
+{parsed_text}
+
+==================================================
+[현재 계좌 원본]
+==================================================
+{account_text}
+
+==================================================
+[4명 독립 분석]
+==================================================
+{team_text}
+
+==================================================
+[회의 규칙]
+==================================================
+
+네 명의 기존 캐릭터와 전문 영역을 절대로 섞지 마라.
+
+🐦 김선달
+- 펀더멘털 + 기업 + 뉴스
+- 자신감 있고 말빨이 좋다.
+- 새로운 정보를 발견하면 적극적으로 끼어든다.
+- 자연스러운 캐릭터 말투를 사용한다.
+
+🐍 이묵
+- 기술적 분석
+- 냉정하고 짧게 말한다.
+- 차트의 허점을 지적한다.
+
+🦝 너부리
+- 실제 계좌 + 포트폴리오
+- 현실적인 관점에서 비중과 위험을 본다.
+- 계좌에 손해가 될 만한 부분은 강하게 지적한다.
+
+🐢 현무
+- 거시경제 + 시장환경
+- 느긋하고 차분하다.
+- 급한 결론을 경계하며 큰 흐름을 본다.
 
 중요:
-- 기존 캐릭터의 말투를 바꾸지 마라.
-- 기존 캐릭터의 성격을 바꾸지 마라.
-- 다른 AI의 역할을 대신하지 마라.
-- 아래 회의 내용을 참고하여 네 관점에서 의견을 제시하라.
-- 근거 없는 주장에는 동의하지 마라.
-- 틀린 부분이 있다면 직접 반박하라.
-- 좋은 주장이라면 인정해도 된다.
-- 억지로 반박할 필요는 없다.
-- 사실과 추정을 구분하라.
-- 원본 계좌 데이터가 있다면 그것을 우선하라.
+- 이미 주어진 독립 분석을 우선 사용한다.
+- 없는 숫자나 뉴스를 만들어내지 않는다.
+- 네 명이 모두 같은 의견이라고 가정하지 않는다.
+- 의견이 충돌하면 실제 근거가 더 강한 쪽을 구분한다.
+- 억지로 반박하지 않는다.
+- 잘못된 주장에는 명확하게 문제를 지적한다.
+- 계좌 데이터가 있다면 현재 계좌 원본을 최우선으로 본다.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[원래 사용자 질문]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+==================================================
+[회의 진행 방식]
+==================================================
 
-{original_question}
+기존 ROUND 1 / ROUND 2처럼 각 AI를 다시 호출하지 않는다.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[현재 발언자]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+한 번의 통합 회의 안에서 다음을 수행한다.
 
-{current_agent}
+1. 네 명의 핵심 주장 파악
+2. 서로 충돌하는 주장 확인
+3. 근거가 약한 주장 제거
+4. 서로의 주장에 대한 짧은 반박/인정
+5. 의견이 바뀌어야 하는 부분 판단
+6. 사용자 질문에 직접 연결
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[현재까지의 회의 내용]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+각 캐릭터가 실제 회의에서 말하는 것처럼 작성한다.
 
-{transcript}
+예:
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[이번 발언에서 해야 할 것]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🐦 김선달
+"잠깐만! 이 숫자는 그냥 넘기면 안 돼."
 
-1. 다른 팀원의 주장 중 동의하는 부분
-2. 다른 팀원의 주장 중 반박할 부분
-3. 반박한다면 구체적인 근거
-4. 네 기존 담당 관점에서 추가로 확인해야 할 것
-5. 현재 시점에서 네 의견이 바뀌었는지 여부
-6. 최종적으로 사용자 질문에 대한 네 입장
+🐍 이묵
+"펀더멘털은 인정. 하지만 차트는 아직 약세다."
 
-단순히 다른 사람의 말을 요약하지 말고
-실제 회의에서 상대방에게 말하듯이 이야기하라.
+🦝 너부리
+"둘 다 맞는데 계좌 비중을 봐야 해."
+
+🐢 현무
+"조금 천천히 보죠. 현재 시장환경까지 고려하면..."
+
+이런 식으로 자연스럽게 의견 충돌이 드러나야 한다.
+
+단, 모든 문장에 캐릭터 유행어를 붙이지 않는다.
+
+==================================================
+[토론 결과 형식]
+==================================================
+
+다음 JSON 형식으로 반환한다.
+
+{{
+  "meeting_summary": "회의에서 가장 중요한 충돌과 합의",
+  "agent_positions": {{
+    "crow": "김선달의 최종 입장",
+    "snake": "이묵의 최종 입장",
+    "raccoon": "너부리의 최종 입장",
+    "turtle": "현무의 최종 입장"
+  }},
+  "conflicts": [
+    "핵심 의견 충돌 1",
+    "핵심 의견 충돌 2"
+  ],
+  "consensus": [
+    "네 명이 공통적으로 인정하는 핵심 근거"
+  ],
+  "important_corrections": [
+    "사실관계 또는 논리에서 바로잡은 내용"
+  ],
+  "transcript": "짧은 실제 회의 형식의 대화"
+}}
+
+JSON 외의 설명은 추가하지 않는다.
 """
 
-
-# ============================================================
-# 토론 시작
-# ============================================================
 
 def run_debate(
     modules,
     parsed,
     account_data,
-    team_results
+    team_results,
 ):
+    """
+    4명의 독립 분석을 한 번만 수행한 뒤,
+    그 결과를 하나의 AI 호출로 토론한다.
+    """
 
-    question = parsed.get(
-        "question",
-        ""
-    )
+    question = parsed.get("question", "")
 
     print()
     print("=" * 70)
-    print(
-        "                 ⚔️ 4인 투자 토론 시작"
-    )
+    print("                 ⚔️ 4인 통합 투자 토론")
     print("=" * 70)
-
     print()
-    print(
-        "※ 기존 AI 캐릭터와 프롬프트는 변경하지 않습니다."
+    print("※ 독립 분석을 다시 호출하지 않습니다.")
+    print("※ 기존 2라운드 재반박 구조를 제거했습니다.")
+
+    prompt = build_debate_prompt(
+        question=question,
+        parsed=parsed,
+        account_data=account_data,
+        team_results=team_results,
     )
 
-    # --------------------------------------------------------
-    # 기존 분석 결과
-    # --------------------------------------------------------
-
-    transcript_parts = []
-
-    transcript_parts.append(
-        "===== 1차 독립 분석 ====="
-    )
-
-    for key, name in AI_NAMES.items():
-
-        result = team_results.get(
-            key,
-            ""
+    try:
+        result = ai_router.generate_content(
+            prompt=prompt,
+            config=None,
         )
 
-        transcript_parts.append(
-            f"\n[{name}]\n{result}"
-        )
-
-    transcript = "\n".join(
-        transcript_parts
-    )
-
-    debate_results = []
-
-    # ========================================================
-    # ROUND 1
-    # ========================================================
-
-    print()
-    print(
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    )
-    print(
-        "⚔️ ROUND 1 — 서로의 의견에 대한 첫 반박"
-    )
-    print(
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    )
-
-    for key, name in AI_NAMES.items():
-
-        module = modules.get(
-            key
+        text = normalize_result(
+            getattr(result, "text", result)
         )
 
         print()
-        print(
-            f"▶ {name} 발언 준비..."
-        )
+        print("✅ 4인 통합 토론 완료")
 
-        debate_question = make_debate_question(
-            question,
-            name,
-            transcript,
-            1
-        )
+        try:
+            parsed_result = json.loads(text)
+        except Exception:
+            parsed_result = {
+                "meeting_summary": text,
+                "agent_positions": {},
+                "conflicts": [],
+                "consensus": [],
+                "important_corrections": [],
+                "transcript": text,
+            }
 
-        result = call_existing_ai(
-            module,
-            name,
-            parsed,
-            account_data,
-            debate_question
-        )
-
-        debate_results.append({
-
-            "round": 1,
-
-            "agent": key,
-
-            "name": name,
-
-            "content": result
-        })
-
-        transcript += (
-            f"\n\n[{name} - ROUND 1]\n"
-            f"{result}"
-        )
-
-        print(
-            f"✅ {name} 발언 완료"
-        )
-
-    # ========================================================
-    # ROUND 2
-    # ========================================================
-
-    print()
-    print(
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    )
-    print(
-        "⚔️ ROUND 2 — 재반박 및 의견 수정"
-    )
-    print(
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    )
-
-    for key, name in AI_NAMES.items():
-
-        module = modules.get(
-            key
-        )
-
-        print()
-        print(
-            f"▶ {name} 재발언 준비..."
-        )
-
-        debate_question = make_debate_question(
-            question,
-            name,
-            transcript,
-            2
-        )
-
-        result = call_existing_ai(
-            module,
-            name,
-            parsed,
-            account_data,
-            debate_question
-        )
-
-        debate_results.append({
-
-            "round": 2,
-
-            "agent": key,
-
-            "name": name,
-
-            "content": result
-        })
-
-        transcript += (
-            f"\n\n[{name} - ROUND 2]\n"
-            f"{result}"
-        )
-
-        print(
-            f"✅ {name} 재발언 완료"
-        )
-
-    # ========================================================
-    # 최종 의견 정리
-    # ========================================================
-
-    final_positions = {}
-
-    for key, name in AI_NAMES.items():
-
-        agent_rounds = [
-
-            item["content"]
-
-            for item in debate_results
-
-            if item["agent"] == key
-        ]
-
-        final_positions[key] = {
-
-            "name": name,
-
-            "round_1":
-                agent_rounds[0]
-                if len(agent_rounds) > 0
-                else "",
-
-            "round_2":
-                agent_rounds[1]
-                if len(agent_rounds) > 1
-                else ""
+        return {
+            "original_question": question,
+            "initial_results": team_results,
+            "debate_results": [
+                {
+                    "round": 1,
+                    "agent": "team",
+                    "name": "⚔️ 통합 회의",
+                    "content": text,
+                }
+            ],
+            "final_positions": parsed_result.get(
+                "agent_positions", {}
+            ),
+            "meeting_summary": parsed_result.get(
+                "meeting_summary", ""
+            ),
+            "conflicts": parsed_result.get(
+                "conflicts", []
+            ),
+            "consensus": parsed_result.get(
+                "consensus", []
+            ),
+            "important_corrections": parsed_result.get(
+                "important_corrections", []
+            ),
+            "transcript": parsed_result.get(
+                "transcript", text
+            ),
         }
 
-    print()
-    print("=" * 70)
-    print(
-        "                 ⚔️ 4인 토론 종료"
-    )
-    print("=" * 70)
+    except Exception as e:
+        print()
+        print("❌ 통합 토론 실패")
+        print(
+            f"{type(e).__name__}: {e}"
+        )
 
-    return {
-
-        "original_question":
-            question,
-
-        "initial_results":
-            team_results,
-
-        "debate_results":
-            debate_results,
-
-        "final_positions":
-            final_positions,
-
-        "transcript":
-            transcript
-    }
+        return {
+            "original_question": question,
+            "initial_results": team_results,
+            "debate_results": [],
+            "final_positions": {},
+            "meeting_summary": "",
+            "conflicts": [],
+            "consensus": [],
+            "important_corrections": [],
+            "transcript": "",
+            "error": str(e),
+        }
