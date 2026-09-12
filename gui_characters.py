@@ -1,5 +1,6 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
+from datetime import datetime
 
 SPECS = {
     '현무': ('#5f8a5b', '#274735', '#b99a63'),
@@ -36,12 +37,38 @@ class CharacterLayer:
     POSITIONS={'현무':(110,304,0),'김선달':(375,304,0),'이묵':(640,304,0),'너부리':(905,304,0),'알프레도':(1229,304,0)}
     IN_ORDER=['알프레도','김선달','이묵','너부리','현무']; OUT_ORDER=['김선달','이묵','너부리','현무','알프레도']; DOOR=(58.0,285.0)
     def __init__(self):
-        self.characters={n:PixelCharacter(n) for n in self.POSITIONS}; self.pos={n:(float(v[0]),float(v[1])) for n,v in self.POSITIONS.items()}; self.active={n:True for n in self.POSITIONS}; self.mode='idle'; self.queue=[]; self.sequence=[]; self.index=0; self.ticks=0; self.move_speed=5; self.office_open=True
-    def set_office_hours(self, hour):
+        self.characters={n:PixelCharacter(n) for n in self.POSITIONS}; self.pos={n:(float(v[0]),float(v[1])) for n,v in self.POSITIONS.items()}; self.active={n:True for n in self.POSITIONS}; self.mode='idle'; self.queue=[]; self.sequence=[]; self.index=0; self.ticks=0; self.move_speed=5
+        # IMPORTANT: startup state is determined immediately from real local time.
+        # 09:00-18:00 = in office. Otherwise everyone is already off-screen.
+        now=datetime.now(); self.office_open=9.0 <= (now.hour + now.minute/60.0 + now.second/3600.0) < 18.0
+        if not self.office_open:
+            self.mode='off_hours'
+            self.queue=[]; self.sequence=[]; self.index=0; self.ticks=0
+            for n in self.POSITIONS:
+                self.active[n]=False
+                self.pos[n]=self.DOOR
+        else:
+            for n,(x,y,_) in self.POSITIONS.items():
+                self.active[n]=True
+                self.pos[n]=(float(x),float(y))
+    def set_office_hours(self, hour, immediate=False):
         open_now=9.0 <= hour < 18.0
-        if open_now==self.office_open: return
+        if open_now==self.office_open:
+            # On GUI startup, force the correct visible state even if the state
+            # was initialized before the first clock tick.
+            if immediate:
+                self.mode='idle' if open_now else 'off_hours'; self.queue=[]; self.sequence=[]; self.index=0; self.ticks=0
+                for n,(x,y,_) in self.POSITIONS.items():
+                    self.active[n]=open_now
+                    self.pos[n]=(float(x),float(y)) if open_now else self.DOOR
+            return
         self.office_open=open_now
-        if open_now:
+        if immediate:
+            self.mode='idle' if open_now else 'off_hours'; self.queue=[]; self.sequence=[]; self.index=0; self.ticks=0
+            for n,(x,y,_) in self.POSITIONS.items():
+                self.active[n]=open_now
+                self.pos[n]=(float(x),float(y)) if open_now else self.DOOR
+        elif open_now:
             self.start_arrival()
         else:
             self.start_departure()
@@ -61,6 +88,7 @@ class CharacterLayer:
         self.mode='leaving'; self.move_speed=5; self.sequence=self.OUT_ORDER; self.index=0; self.ticks=0; self.queue=[]
     def reset_office(self):
         self.mode='idle'; self.queue=[]; self.sequence=[]; self.index=0; self.ticks=0
+        self.office_open=True
         for n,(x,y,_) in self.POSITIONS.items(): self.pos[n]=(float(x),float(y)); self.active[n]=True
     def summon_for_question(self,overtime=False):
         self.queue=[]; self.sequence=[]; self.index=0; self.ticks=0
