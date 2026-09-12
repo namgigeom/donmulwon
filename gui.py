@@ -87,7 +87,12 @@ class MainWindow(QMainWindow):
     def start_analysis(self):
         q=self.input.text().strip()
         if not q or self.thread is not None:return
-        self.button.setEnabled(False); self.progress.show(); self.status.setText('⚔️ AI TRADING TEAM 회의 진행 중...'); self.output.clear(); self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(lambda t:self.output.setPlainText(t)); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.on_finished); self.worker.finished.connect(self.thread.quit); self.thread.finished.connect(self.cleanup_thread); self.thread.start()
+        # A question is an office event: after hours the team rushes back; near closing they stay late.
+        behavior=self.office.motion.on_question()
+        if behavior=='summoned': self.status.setText('🏃 퇴근 후 긴급 호출 · AI TRADING TEAM 복귀 중...')
+        elif behavior=='overtime': self.status.setText('🌙 야근 모드 · AI TRADING TEAM 회의 시작')
+        else: self.status.setText('⚔️ AI TRADING TEAM 회의 진행 중...')
+        self.button.setEnabled(False); self.progress.show(); self.output.clear(); self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(lambda t:self.output.setPlainText(t)); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.on_finished); self.worker.finished.connect(self.thread.quit); self.thread.finished.connect(self.cleanup_thread); self.thread.start()
     def on_failed(self,t): self.output.setPlainText('❌ 분석 오류\n\n'+t); self.status.setText('오류 발생 · 로그를 확인하세요')
     def on_finished(self): self.progress.hide(); self.button.setEnabled(True); self.status.setText('✅ 분석 완료')
     def cleanup_thread(self):
