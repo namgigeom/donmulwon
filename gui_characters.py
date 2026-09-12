@@ -2,21 +2,32 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
 
-class PixelCharacter:
-    """Detailed pixel-art office characters.
+# ---------------------------------------------------------------------------
+# DONMULWON CHARACTER LAYER
+# ---------------------------------------------------------------------------
+# The previous renderer used large geometric blocks.  This version uses a
+# 40x60 logical sprite grid and renders each logical pixel as a tiny 2x2
+# screen pixel.  The characters are intentionally a little smaller than the
+# old ones, while the finer grid makes faces, clothes and animal silhouettes
+# much cleaner.
 
-    The artwork keeps the current on-screen character size, but renders the
-    same silhouettes on a finer logical grid: 1 source unit becomes 1.5
-    logical pixels and each final pixel is 2x2 screen pixels. This makes
-    faces, glasses, eyes, clothing and species features visibly finer without
-    shrinking the characters.
-    """
+PALETTE = {
+    "ink": "#171619",
+    "outline": "#202024",
+    "shirt": "#eee7d7",
+    "tie": "#8b4d4c",
+    "gold": "#d6b86b",
+    "shoe": "#101114",
+}
+
+
+class PixelCharacter:
     SPECS = {
-        "현무": {"kind": "turtle", "body": "#4f7657", "dark": "#294333", "light": "#8fae78", "skin": "#b7aa82", "suit": "#26312d"},
-        "김선달": {"kind": "bird", "body": "#a85f42", "dark": "#63372f", "light": "#d79a55", "skin": "#d8b88b", "suit": "#30343b"},
-        "이묵": {"kind": "snake", "body": "#657b52", "dark": "#35472f", "light": "#b7a961", "skin": "#c9b17d", "suit": "#29332f"},
-        "너부리": {"kind": "raccoon", "body": "#777b7d", "dark": "#424548", "light": "#c4b8a4", "skin": "#b9a68e", "suit": "#34373b"},
-        "알프레도": {"kind": "cat", "body": "#17181c", "dark": "#08090b", "light": "#3b3d45", "skin": "#b9aa94", "suit": "#111316"},
+        "현무": {"kind": "turtle", "main": "#52775b", "dark": "#294637", "light": "#8da874", "skin": "#b7a77d", "suit": "#26322e"},
+        "김선달": {"kind": "bird", "main": "#a85d43", "dark": "#60372f", "light": "#d79b58", "skin": "#d8b98d", "suit": "#30343a"},
+        "이묵": {"kind": "snake", "main": "#60774f", "dark": "#33462f", "light": "#aeb16b", "skin": "#c9b07d", "suit": "#29332f"},
+        "너부리": {"kind": "raccoon", "main": "#777a7d", "dark": "#3d4146", "light": "#c5b9a6", "skin": "#b8a68e", "suit": "#34373c"},
+        "알프레도": {"kind": "cat", "main": "#17181d", "dark": "#08090c", "light": "#444750", "skin": "#bcae98", "suit": "#111316"},
     }
 
     def __init__(self, name):
@@ -24,220 +35,215 @@ class PixelCharacter:
         self.frame = 0
 
     def tick(self):
-        self.frame = (self.frame + 1) % 72
+        self.frame = (self.frame + 1) % 90
 
     def paint(self, p, x, y, scale=2):
         spec = self.SPECS[self.name]
         s = max(1, int(scale))
-        # 1.5x logical subdivision preserves the existing visual size while
-        # reducing the visible pixel block from 3x3 to 2x2.
-        GRID = 1.5
         ox, oy = int(x), int(y)
-        bob = -1 if 60 <= self.frame % 72 <= 63 else 0
-        blink = self.frame % 72 in (56, 57)
+        # Very small idle motion; never changes the character's proportions.
+        bob = -1 if 70 <= self.frame % 90 <= 73 else 0
+        blink = self.frame % 90 in (58, 59)
 
-        def gx(v):
-            return int(round(float(v) * GRID))
-
-        def gy(v):
-            return int(round((float(v) + bob) * GRID))
-
-        def gw(v):
-            return max(1, int(round(float(v) * GRID)))
-
-        def rect(px, py, w, h, color, dy=bob):
+        def cell(px, py, color, w=1, h=1, move=True):
             p.setPen(Qt.NoPen)
             p.setBrush(QColor(color))
-            p.drawRect(ox + gx(px) * s, oy + int(round((float(py) + dy) * GRID)) * s, gw(w) * s, gw(h) * s)
+            yy = py + (bob if move else 0)
+            p.drawRect(ox + px * s, oy + yy * s, max(1, w * s), max(1, h * s))
 
-        def pixel(px, py, color):
-            rect(px, py, 1, 1, color, 0)
+        def pixels(points, color):
+            for px, py in points:
+                cell(px, py, color)
 
-        body, dark, light = spec["body"], spec["dark"], spec["light"]
+        def box(px, py, w, h, color):
+            cell(px, py, color, w, h)
+
+        main, dark, light = spec["main"], spec["dark"], spec["light"]
         skin, suit = spec["skin"], spec["suit"]
-        black, white, gold = "#08090b", "#eee5d3", "#d4b86f"
+        ink, white, gold = PALETTE["ink"], PALETTE["shirt"], PALETTE["gold"]
 
-        # Pixel shadow
-        rect(12, 104, 47, 3, "#111214", 0)
-        rect(19, 107, 31, 1, "#0a0b0d", 0)
+        # Ground shadow
+        box(8, 57, 24, 2, "#121316")
+        box(12, 59, 16, 1, "#0a0b0d")
 
-        # Legs and shoes
-        rect(17, 86, 14, 17, suit)
-        rect(39, 86, 14, 17, suit)
-        rect(14, 101, 18, 6, black)
-        rect(38, 101, 18, 6, black)
-        pixel(16, 103, "#4b4e50"); pixel(53, 103, "#4b4e50")
+        # Legs / trousers / shoes.  Deliberately narrow so the character
+        # reads as a person in a suit rather than a block.
+        box(13, 45, 7, 12, suit)
+        box(21, 45, 7, 12, suit)
+        box(11, 55, 10, 4, PALETTE["shoe"])
+        box(20, 55, 10, 4, PALETTE["shoe"])
+        cell(13, 56, "#4c5052"); cell(28, 56, "#4c5052")
 
-        # Tailored suit body
-        rect(13, 48, 44, 42, suit)
-        rect(16, 51, 38, 36, suit)
-        rect(20, 52, 11, 31, "#3b4145")
-        rect(39, 52, 11, 31, "#24292c")
-        rect(32, 53, 5, 34, white)
-        rect(33, 53, 3, 34, "#d6ccb9")
-        # Lapels
-        rect(25, 51, 7, 16, "#4a4e52")
-        rect(38, 51, 7, 16, "#1f2427")
-        rect(26, 54, 5, 2, "#77716a")
-        rect(39, 54, 5, 2, "#5c5a58")
-        # Tie
-        rect(33, 59, 3, 18, "#824e4b")
-        rect(32, 59, 5, 4, "#a66a61")
-        rect(34, 77, 2, 7, "#613937")
-        # Buttons and pocket
-        for by in (67, 75, 83):
-            pixel(28, by, gold); pixel(42, by, gold)
-        rect(45, 72, 6, 2, "#171a1c")
-        rect(46, 71, 5, 1, "#8e806d")
+        # Torso: outline first, then tailored jacket.
+        box(9, 27, 24, 20, ink)
+        box(10, 28, 22, 18, suit)
+        box(13, 30, 16, 15, suit)
+        # shirt opening + lapels
+        box(18, 29, 4, 16, white)
+        pixels([(17, 30), (16, 31), (15, 32), (14, 33), (13, 34)], "#565b60")
+        pixels([(22, 30), (23, 31), (24, 32), (25, 33), (26, 34)], "#202428")
+        # tie
+        box(19, 34, 2, 10, PALETTE["tie"])
+        box(18, 34, 4, 2, "#aa6861")
+        cell(19, 43, "#623c3a")
+        # buttons / pocket
+        for py in (36, 40, 44):
+            cell(16, py, gold)
+        box(25, 39, 4, 1, "#858078")
+        cell(26, 38, "#d0c1a4")
 
-        # Arms and hands
-        rect(7, 50, 9, 34, suit)
-        rect(54, 50, 9, 34, suit)
-        rect(5, 78, 12, 9, skin)
-        rect(53, 78, 12, 9, skin)
-        rect(7, 84, 8, 5, skin)
-        rect(55, 84, 8, 5, skin)
-        pixel(6, 87, light); pixel(61, 87, light)
+        # Arms, elbows and hands
+        box(5, 29, 5, 16, suit)
+        box(31, 29, 5, 16, suit)
+        box(4, 42, 7, 5, skin)
+        box(31, 42, 7, 5, skin)
+        cell(5, 46, light); cell(36, 46, light)
 
-        # Neck and head base
-        rect(27, 42, 16, 10, skin)
-        rect(29, 43, 12, 8, skin)
-        rect(18, 10, 34, 34, body)
-        rect(22, 6, 26, 7, body)
-        rect(21, 15, 30, 24, body)
-        rect(23, 37, 24, 7, skin)
+        # Neck and base of head
+        box(17, 24, 8, 6, skin)
+        box(11, 8, 21, 17, ink)
+        box(12, 9, 19, 15, main)
+        box(14, 22, 15, 4, skin)
 
         kind = spec["kind"]
 
         if kind == "cat":
-            # Alfredo: black cat, sharp ears, gold glasses, expressive eyes.
-            rect(15, 1, 14, 16, body); rect(41, 1, 14, 16, body)
-            rect(18, 4, 7, 8, "#34313a"); rect(45, 4, 7, 8, "#34313a")
-            pixel(21, 4, "#70505a"); pixel(48, 4, "#70505a")
-            rect(20, 14, 31, 25, body)
-            pixel(20, 17, light); pixel(49, 17, light)
-            pixel(18, 24, light); pixel(51, 24, light)
+            # Alfredo — black cat, glasses and clean formal silhouette.
+            pixels([(12, 9), (13, 7), (14, 5), (15, 7), (16, 9),
+                    (27, 9), (28, 7), (29, 5), (30, 7), (31, 9)], main)
+            pixels([(14, 6), (15, 7), (28, 6), (29, 7)], light)
+            box(14, 11, 16, 11, main)
+            # subtle fur highlights
+            pixels([(13, 13), (14, 12), (29, 13), (30, 15), (15, 20), (28, 20)], light)
             # muzzle
-            rect(25, 32, 21, 8, skin); rect(29, 34, 13, 5, "#d0c1a8")
-            # glasses
-            rect(18, 18, 14, 3, gold); rect(38, 18, 14, 3, gold)
-            rect(18, 18, 3, 12, gold); rect(29, 18, 3, 12, gold)
-            rect(38, 18, 3, 12, gold); rect(49, 18, 3, 12, gold)
-            rect(31, 21, 8, 3, gold); rect(15, 20, 4, 2, gold); rect(52, 20, 4, 2, gold)
+            box(17, 19, 10, 5, skin)
+            box(19, 20, 6, 3, "#d0c1aa")
+            # gold glasses, separated into tiny pixels
+            box(13, 14, 7, 1, gold); box(25, 14, 7, 1, gold)
+            box(13, 14, 1, 5, gold); box(19, 14, 1, 5, gold)
+            box(25, 14, 1, 5, gold); box(31, 14, 1, 5, gold)
+            box(20, 15, 5, 1, gold)
             # eyes
             if blink:
-                rect(23, 25, 6, 2, "#d7c96f"); rect(41, 25, 6, 2, "#d7c96f")
+                box(15, 17, 3, 1, "#e0ca72"); box(27, 17, 3, 1, "#e0ca72")
             else:
-                rect(23, 24, 6, 6, "#e5cf72"); rect(41, 24, 6, 6, "#e5cf72")
-                pixel(25, 24, black); pixel(26, 25, black); pixel(25, 27, black)
-                pixel(43, 24, black); pixel(44, 25, black); pixel(43, 27, black)
-            # nose, mouth, whiskers
-            rect(32, 31, 6, 4, "#b97882")
-            pixel(31, 36, skin); pixel(38, 36, skin)
-            rect(20, 35, 10, 1, skin); rect(40, 35, 10, 1, skin)
-            rect(17, 38, 11, 1, "#8e8c88"); rect(43, 38, 11, 1, "#8e8c88")
+                box(15, 16, 3, 3, "#e5cf72"); box(27, 16, 3, 3, "#e5cf72")
+                cell(16, 16, ink); cell(16, 18, ink); cell(28, 16, ink); cell(28, 18, ink)
+            cell(20, 20, "#b97680"); cell(23, 20, "#b97680")
+            # whiskers
+            pixels([(14, 21), (13, 22), (12, 22), (26, 21), (27, 22), (28, 22)], "#aaa6a0")
 
         elif kind == "turtle":
-            # Hyeonmu: turtle head and a strongly patterned shell.
-            rect(47, 20, 13, 18, skin); rect(51, 18, 9, 7, skin)
-            rect(55, 22, 3, 3, black); pixel(57, 21, "#f0e2ae")
-            rect(48, 32, 12, 5, skin)
-            # shell
-            rect(8, 46, 54, 40, dark); rect(12, 48, 46, 35, body)
-            rect(17, 51, 36, 29, "#63805b")
-            rect(30, 48, 6, 33, light); rect(17, 62, 36, 6, light)
-            rect(22, 51, 5, 11, dark); rect(41, 51, 5, 11, dark)
-            rect(19, 69, 8, 10, dark); rect(43, 69, 8, 10, dark)
-            pixel(31, 55, "#b0bf83"); pixel(34, 72, "#b0bf83")
-            # arms/flippers
-            rect(5, 66, 12, 13, skin); rect(53, 66, 12, 13, skin)
-            rect(4, 76, 10, 8, skin); rect(56, 76, 10, 8, skin)
-            # collar and tie in front
-            rect(31, 82, 7, 9, suit); rect(32, 82, 5, 5, "#d7d0c1")
-            rect(33, 87, 3, 7, "#83504b")
+            # Hyeonmu — head peeking right, patterned shell, turtle limbs.
+            box(27, 12, 7, 11, skin)
+            box(30, 11, 5, 5, skin)
+            cell(32, 15, ink); cell(33, 14, "#eee0a5")
+            box(29, 21, 6, 3, skin)
+            # shell outline and shell plates
+            box(7, 27, 22, 19, dark)
+            box(9, 28, 18, 16, main)
+            box(12, 30, 12, 12, "#63805a")
+            box(17, 29, 2, 14, light)
+            box(11, 35, 14, 2, light)
+            pixels([(12, 30), (13, 31), (21, 30), (22, 31), (12, 39), (13, 40), (21, 39), (22, 40)], dark)
+            pixels([(16, 32), (19, 32), (16, 38), (19, 38)], "#b0bd82")
+            # flippers
+            box(5, 38, 6, 7, skin); box(27, 38, 7, 7, skin)
+            box(4, 44, 7, 4, skin); box(28, 44, 7, 4, skin)
+            # shirt collar / tie over shell
+            box(17, 43, 5, 5, suit); box(18, 43, 3, 2, white)
+            box(19, 46, 2, 5, PALETTE["tie"])
 
         elif kind == "bird":
-            # Seondal: layered feathers, expressive eyes and beak.
-            rect(13, 3, 18, 12, body); rect(39, 5, 14, 10, body)
-            rect(14, 13, 38, 28, body)
-            rect(10, 21, 11, 19, body); rect(47, 20, 12, 20, body)
-            rect(17, 18, 9, 3, light); rect(37, 18, 10, 3, light)
-            rect(14, 25, 8, 3, dark); rect(45, 25, 8, 3, dark)
-            rect(18, 29, 8, 3, dark); rect(39, 29, 9, 3, dark)
-            rect(20, 12, 9, 8, white); rect(38, 12, 9, 8, white)
+            # Seondal — bird head/crest, beak and feather layering.
+            pixels([(13, 9), (13, 7), (14, 5), (15, 7), (16, 9),
+                    (27, 9), (28, 7), (29, 6), (30, 8)], main)
+            box(12, 11, 19, 12, main)
+            pixels([(12, 14), (13, 13), (14, 14), (27, 13), (29, 14), (30, 16)], light)
+            # white eye patches
+            box(15, 12, 5, 4, white); box(24, 12, 5, 4, white)
             if not blink:
-                rect(23, 14, 3, 4, black); rect(41, 14, 3, 4, black)
-                pixel(23, 14, light); pixel(41, 14, light)
-            rect(47, 17, 15, 7, light); rect(55, 21, 10, 4, "#b66f38")
-            pixel(60, 20, gold)
-            rect(3, 35, 14, 8, dark); rect(50, 34, 15, 9, dark)
-            rect(7, 42, 10, 5, body); rect(51, 42, 10, 5, body)
+                cell(17, 13, ink); cell(26, 13, ink)
+            else:
+                box(15, 14, 5, 1, dark); box(24, 14, 5, 1, dark)
+            # beak
+            box(29, 16, 6, 3, light); box(34, 17, 3, 2, "#b56e3c")
+            cell(35, 18, gold)
+            # cheek feathers
+            pixels([(14, 17), (15, 18), (16, 19), (27, 18), (29, 19)], dark)
+            box(10, 21, 6, 6, dark); box(27, 21, 6, 6, dark)
+            pixels([(11, 22), (12, 23), (28, 22), (29, 23)], light)
 
         elif kind == "snake":
-            # Imuk: layered scales, slit pupils and forked tongue.
-            rect(16, 3, 38, 11, body); rect(12, 11, 45, 30, body)
-            rect(17, 16, 35, 20, "#586d49")
-            for px, py in ((15, 13), (22, 12), (30, 13), (38, 12), (46, 14),
-                           (19, 21), (27, 20), (36, 21), (44, 20),
-                           (22, 29), (31, 28), (40, 29)):
-                rect(px, py, 5, 4, light)
-            rect(19, 16, 11, 8, skin); rect(39, 16, 11, 8, skin)
+            # Imuk — clean scale pattern, slit pupils and forked tongue.
+            box(12, 9, 19, 14, main)
+            box(14, 12, 15, 9, "#587047")
+            # scales as tiny repeated pixels
+            for px, py in ((14, 11), (18, 11), (22, 11), (26, 11),
+                           (16, 15), (20, 15), (24, 15), (28, 15),
+                           (14, 19), (18, 19), (22, 19), (26, 19)):
+                cell(px, py, light)
+                cell(px + 1, py, light)
+            # eyes
+            box(15, 12, 5, 4, skin); box(24, 12, 5, 4, skin)
             if not blink:
-                rect(23, 17, 2, 6, black); rect(43, 17, 2, 6, black)
+                box(17, 12, 1, 4, ink); box(26, 12, 1, 4, ink)
             else:
-                rect(22, 20, 6, 2, dark); rect(42, 20, 6, 2, dark)
-            rect(31, 34, 3, 9, "#b76d6f")
-            rect(28, 41, 6, 2, "#b76d6f"); rect(34, 41, 6, 2, "#b76d6f")
-            rect(7, 31, 13, 12, body); rect(49, 31, 13, 12, body)
-            rect(4, 40, 12, 8, dark); rect(54, 40, 12, 8, dark)
+                box(16, 14, 4, 1, dark); box(25, 14, 4, 1, dark)
+            # mouth + forked tongue
+            box(19, 20, 7, 1, dark)
+            box(21, 21, 2, 5, "#b76c70")
+            cell(20, 25, "#b76c70"); cell(23, 25, "#b76c70")
+            # side coils
+            box(8, 20, 6, 8, main); box(29, 20, 6, 8, main)
+            pixels([(9, 22), (10, 24), (30, 22), (31, 24)], light)
 
         elif kind == "raccoon":
-            # Neoburi: ears, dark mask, muzzle and striped tail.
-            rect(14, 3, 13, 13, body); rect(43, 3, 13, 13, body)
-            rect(18, 7, 6, 6, light); rect(46, 7, 6, 6, light)
-            rect(15, 13, 41, 28, body)
-            rect(17, 17, 36, 11, dark)
-            rect(19, 18, 12, 8, "#303337"); rect(39, 18, 12, 8, "#303337")
-            rect(21, 19, 7, 6, "#d5bd75"); rect(42, 19, 7, 6, "#d5bd75")
-            if not blink:
-                rect(23, 19, 2, 6, black); rect(44, 19, 2, 6, black)
-            else:
-                rect(21, 22, 7, 2, black); rect(42, 22, 7, 2, black)
-            rect(25, 27, 21, 11, light); rect(31, 30, 9, 5, "#d2c1a7")
-            rect(34, 31, 4, 3, "#85575a")
-            pixel(30, 36, dark); pixel(39, 36, dark)
-            rect(9, 27, 10, 13, body); rect(51, 27, 10, 13, body)
-            rect(6, 36, 12, 8, dark); rect(52, 36, 12, 8, dark)
-            # tail behind suit
-            rect(52, 61, 13, 9, body); rect(58, 68, 10, 8, body)
-            rect(54, 76, 11, 8, dark); rect(59, 84, 9, 7, body)
-
-        # Foreground suit details keep the office-worker silhouette consistent.
-        rect(31, 87, 7, 3, suit)
-        rect(32, 88, 5, 2, "#ddd4c4")
-        rect(33, 90, 3, 7, "#804d49")
-        pixel(28, 67, gold); pixel(43, 67, gold)
-        pixel(28, 75, gold); pixel(43, 75, gold)
+            # Neoburi — ears, mask, muzzle and striped tail.
+            box(12, 6, 5, 6, main); box(27, 6, 5, 6, main)
+            cell(13, 7, light); cell(29, 7, light)
+            box(12, 10, 20, 14, main)
+            # characteristic dark face mask
+            box(13, 13, 18, 6, dark)
+            box(15, 13, 5, 5, "#2e3236"); box(24, 13, 5, 5, "#2e3236")
+            # eyes
+            box(16, 14, 3, 3, "#d7c775"); box(25, 14, 3, 3, "#d7c775")
+            cell(17, 14, ink); cell(26, 14, ink)
+            # muzzle and nose
+            box(17, 18, 10, 5, light)
+            box(20, 19, 4, 3, "#d0bea2")
+            cell(21, 19, "#86565b")
+            pixels([(18, 22), (19, 23), (26, 22), (25, 23)], dark)
+            # ears and cheek accents
+            pixels([(12, 11), (13, 10), (14, 11), (30, 11), (31, 10)], light)
+            box(7, 22, 6, 7, dark); box(29, 22, 6, 7, dark)
+            # tail peeking behind right side
+            box(32, 38, 6, 5, main)
+            box(34, 39, 4, 2, light); box(34, 42, 4, 2, dark)
 
 
 class CharacterLayer:
+    # Horizontal one-line office arrangement. Hyeonmu is nearest the door;
+    # Alfredo is isolated at the far end as team leader.
     POSITIONS = {
-        "현무": (135, 350),
-        "김선달": (410, 350),
-        "이묵": (685, 350),
-        "너부리": (960, 350),
-        "알프레도": (1230, 330),
+        "현무": (105, 385, 0),
+        "김선달": (380, 385, 0),
+        "이묵": (655, 385, 0),
+        "너부리": (930, 385, 0),
+        "알프레도": (1215, 385, 0),
     }
-    # Keep the current character size while using a finer 2x screen pixel.
-    SCALE = 2
 
     def __init__(self):
-        self.agents = {name: PixelCharacter(name) for name in self.POSITIONS}
+        self.characters = {name: PixelCharacter(name) for name in self.POSITIONS}
 
     def tick(self):
-        for agent in self.agents.values():
-            agent.tick()
+        for character in self.characters.values():
+            character.tick()
 
     def paint(self, p):
-        for name, (x, y) in self.POSITIONS.items():
-            self.agents[name].paint(p, x, y, self.SCALE)
+        # Keep the tiny sprite pixels crisp.  No scaling/antialiasing is used.
+        for name, (x, y, _) in self.POSITIONS.items():
+            self.characters[name].paint(p, x, y, 2)
+
+
+__all__ = ["PixelCharacter", "CharacterLayer"]
