@@ -3,10 +3,13 @@ from PySide6.QtGui import QColor
 
 
 class PixelCharacter:
-    """Detailed low-resolution pixel characters.
+    """Detailed pixel-art office characters.
 
-    70x110 logical pixels enlarged 3x: smaller pixels, but a much larger
-    character silhouette with readable faces, suits and species traits.
+    The artwork keeps the current on-screen character size, but renders the
+    same silhouettes on a finer logical grid: 1 source unit becomes 1.5
+    logical pixels and each final pixel is 2x2 screen pixels. This makes
+    faces, glasses, eyes, clothing and species features visibly finer without
+    shrinking the characters.
     """
     SPECS = {
         "현무": {"kind": "turtle", "body": "#4f7657", "dark": "#294333", "light": "#8fae78", "skin": "#b7aa82", "suit": "#26312d"},
@@ -23,20 +26,32 @@ class PixelCharacter:
     def tick(self):
         self.frame = (self.frame + 1) % 72
 
-    def paint(self, p, x, y, scale=3):
+    def paint(self, p, x, y, scale=2):
         spec = self.SPECS[self.name]
         s = max(1, int(scale))
+        # 1.5x logical subdivision preserves the existing visual size while
+        # reducing the visible pixel block from 3x3 to 2x2.
+        GRID = 1.5
         ox, oy = int(x), int(y)
         bob = -1 if 60 <= self.frame % 72 <= 63 else 0
         blink = self.frame % 72 in (56, 57)
 
+        def gx(v):
+            return int(round(float(v) * GRID))
+
+        def gy(v):
+            return int(round((float(v) + bob) * GRID))
+
+        def gw(v):
+            return max(1, int(round(float(v) * GRID)))
+
         def rect(px, py, w, h, color, dy=bob):
             p.setPen(Qt.NoPen)
             p.setBrush(QColor(color))
-            p.drawRect(ox + int(px) * s, oy + (int(py) + dy) * s, int(w) * s, int(h) * s)
+            p.drawRect(ox + gx(px) * s, oy + int(round((float(py) + dy) * GRID)) * s, gw(w) * s, gw(h) * s)
 
         def pixel(px, py, color):
-            rect(px, py, 1, 1, color)
+            rect(px, py, 1, 1, color, 0)
 
         body, dark, light = spec["body"], spec["dark"], spec["light"]
         skin, suit = spec["skin"], spec["suit"]
@@ -213,7 +228,8 @@ class CharacterLayer:
         "너부리": (960, 350),
         "알프레도": (1230, 330),
     }
-    SCALE = 3
+    # Keep the current character size while using a finer 2x screen pixel.
+    SCALE = 2
 
     def __init__(self):
         self.agents = {name: PixelCharacter(name) for name in self.POSITIONS}
