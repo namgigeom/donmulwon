@@ -1,29 +1,84 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
+from math import sin, cos, pi
 
 class PixelBackground:
-    def __init__(self): self.time='밤'; self.weather='맑음'; self.phase=0
+    def __init__(self):
+        self.time='밤'; self.weather='맑음'; self.phase=0
+        self.hour=0.0
+
     def set_time(self,v): self.time=v
     def set_weather(self,v): self.weather=v
+
+    def set_clock(self, dt):
+        """실제 시각을 받아 태양/달의 위치와 하늘을 연속적으로 갱신한다."""
+        self.hour = dt.hour + dt.minute/60.0 + dt.second/3600.0
+        self.phase = int(dt.timestamp()) % 120
+
     def tick(self): self.phase=(self.phase+1)%120
+
+    def _sky_color(self):
+        # 24시간을 연속적인 색 변화로 표현한다.
+        h=self.hour
+        stops=[(0.0,(24,38,58)),(5.0,(38,51,67)),(6.0,(224,155,105)),
+               (7.0,(157,194,202)),(11.0,(168,204,211)),(16.0,(169,205,211)),
+               (18.0,(229,145,91)),(19.5,(111,83,103)),(21.0,(39,53,72)),(24.0,(24,38,58))]
+        for i in range(len(stops)-1):
+            a,ca=stops[i]; b,cb=stops[i+1]
+            if a <= h <= b:
+                t=(h-a)/(b-a)
+                return tuple(int(ca[k]*(1-t)+cb[k]*t) for k in range(3))
+        return stops[-1][1]
+
     def paint(self,p,w,h):
         p.setPen(Qt.NoPen); p.fillRect(0,0,w,h,QColor('#17181a'))
         p.setBrush(QColor('#806a50')); p.drawRect(18,18,w-36,205)
         wx,wy,ww,wh=112,34,w-150,166
-        sky={'아침':'#aac5c5','낮':'#a8ccd3','저녁':'#746d7b','밤':'#273548'}.get(self.time,'#273548')
+        sky=self._sky_color()
+        p.setBrush(QColor(*sky)); p.drawRect(wx,wy,ww,wh)
+
+        # 창문 프레임
         p.setBrush(QColor('#3a342e')); p.drawRect(wx-7,wy-7,ww+14,wh+14)
-        p.setBrush(QColor(sky)); p.drawRect(wx,wy,ww,wh)
+        p.setBrush(QColor(*sky)); p.drawRect(wx,wy,ww,wh)
+
+        # 태양: 05:30~19:30에 떠 있고, 새벽/해질녘에는 낮게 이동
+        hnow=self.hour
+        if 5.5 <= hnow <= 19.5:
+            t=(hnow-5.5)/14.0
+            sx=wx+int(t*ww)
+            sy=wy+wh-20-int(sin(pi*t)*105)
+            radius=9 if 6.5<hnow<18.5 else 7
+            p.setBrush(QColor('#ffe0a0')); p.drawRect(sx-radius,sy-radius,sx+radius-(sx-radius),2*radius)
+            # 해 주변의 픽셀 글로우
+            if hnow < 7.5 or hnow > 17.5:
+                p.setBrush(QColor('#e8a56e'))
+                p.drawRect(sx-radius-4,sy-radius-4,2*radius+8,2*radius+8)
+                p.setBrush(QColor('#ffe0a0')); p.drawRect(sx-radius,sy-radius,2*radius,2*radius)
+
+        # 달: 해가 진 뒤 하늘을 따라 움직인다. 위상은 단순 장식용으로 표시.
+        if hnow >= 18.5 or hnow < 6.5:
+            t=((hnow-18.5)%24)/12.0
+            if t <= 1.0:
+                mx=wx+int(t*ww); my=wy+wh-18-int(sin(pi*t)*108)
+                p.setBrush(QColor('#e7e2c9')); p.drawRect(mx-7,my-7,14,14)
+                p.setBrush(QColor('#273548'))
+                p.drawRect(mx+1,my-6,6,12)
+
         base=wy+wh
         for i in range(30):
             bw=18+(i%3)*7; bh=28+((i*37)%82); bx=wx+5+int(i*(ww-20)/30)
-            p.setBrush(QColor('#27323d' if self.time!='낮' else '#60747c')); p.drawRect(bx,base-bh,bw,bh)
-            if self.time in ('저녁','밤'):
+            nightish=hnow<6.5 or hnow>=17.5
+            p.setBrush(QColor('#27323d' if nightish else '#60747c')); p.drawRect(bx,base-bh,bw,bh)
+            if nightish:
                 p.setBrush(QColor('#d7c27c'))
                 for yy in range(base-bh+9,base-5,14):
                     if (i+yy//14)%3: p.drawRect(bx+4,yy,4,4)
+
         p.setBrush(QColor('#8a7358'))
         for x in (wx+ww//4,wx+ww//2,wx+3*ww//4): p.drawRect(x,wy,5,wh)
         p.drawRect(wx,wy+wh-6,ww,6)
+
+        # 실내 바닥
         p.setBrush(QColor('#5c4a39')); p.drawRect(18,223,w-36,h-241)
         p.setPen(QColor('#6d5742'))
         for x in range(28,w-20,72): p.drawLine(x,223,x,h-18)
@@ -32,6 +87,7 @@ class PixelBackground:
         p.setBrush(QColor('#251c17')); p.drawRect(27,274,72,148)
         p.setBrush(QColor('#765237')); p.drawRect(35,282,56,132)
         p.setBrush(QColor('#c8ae73')); p.drawRect(78,345,6,7)
+
         if self.weather=='비':
             p.setBrush(QColor('#bdcdd2'))
             for i in range(75): p.drawRect(wx+(i*67%ww),wy+(i*41+self.phase*4)%max(1,wh-8),2,8)
