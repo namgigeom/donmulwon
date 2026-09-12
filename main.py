@@ -132,7 +132,6 @@ def run_meeting(parsed, modules, account_data):
     if cat is not None and callable(getattr(cat,"analyze",None)):
         print("\n🐱 알프레도 최종 검증 시작 (1회)")
         ticker_label=", ".join(tickers) if tickers else "전체 시장 / 포트폴리오"
-        # cat.py uses ticker in a history filename. Windows forbids slash and several other characters.
         cat_filename_label = re.sub(r'[<>:"/\\|?*]', "_", ticker_label).strip(" .") or "MARKET"
         instruction=f"""
 [최종 사용자 화면 출력 규칙]
@@ -162,6 +161,22 @@ def run_meeting(parsed, modules, account_data):
     print(f"💾 최종 회의록: {final_path}")
     return final_data
 
+def run_analysis(question):
+    """GUI에서 호출하는 비대화형 분석 진입점.
+
+    기존 CLI main()과 동일한 분석 파이프라인을 사용하되 input()을 호출하지 않는다.
+    GUI 스레드에서 실행할 수 있도록 결과를 그대로 반환한다.
+    """
+    question = (question or "").strip()
+    if not question:
+        raise ValueError("분석 질문이 비어 있습니다.")
+    modules = load_ai_modules()
+    parsed = parse_question(question)
+    show_request(parsed)
+    account_data = get_account_data()
+    save_json(AI_PORTFOLIO_FILE, account_data)
+    return run_meeting(parsed, modules, account_data)
+
 def main():
     print("\n"+"="*70)
     print("🏦 AI TRADING TEAM / 돈물원")
@@ -179,11 +194,7 @@ def main():
         if question.lower() in {"exit","quit","종료"}:
             print("🏦 돈물원을 종료합니다.")
             break
-        parsed=parse_question(question)
-        show_request(parsed)
-        account_data=get_account_data()
-        save_json(AI_PORTFOLIO_FILE,account_data)
-        run_meeting(parsed,modules,account_data)
+        run_analysis(question)
 
 if __name__=="__main__":
     try: main()
