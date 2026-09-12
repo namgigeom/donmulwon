@@ -21,8 +21,7 @@ class AnalysisWorker(QObject):
         except Exception: self.failed.emit(traceback.format_exc())
 class DialoguePanel(QTextBrowser):
     COLORS={'현무':'#668a62','김선달':'#666b78','이묵':'#829b5e','너부리':'#8d8178','알프레도':'#c09a5b'}; ICONS={'현무':'🐢','김선달':'🐦','이묵':'🐍','너부리':'🦝','알프레도':'🐱'}
-    def __init__(self):
-        super().__init__(); self.setReadOnly(True); self.setMaximumHeight(250); self.setStyleSheet('QTextBrowser{background:#141719;border:1px solid #4b4034;padding:8px;}')
+    def __init__(self): super().__init__(); self.setReadOnly(True); self.setMaximumHeight(250); self.setStyleSheet('QTextBrowser{background:#141719;border:1px solid #4b4034;padding:8px;}')
     def _section(self,text,name):
         m=re.search(r'###\s*[^\n]*'+re.escape(name)+r'.*?(?=###\s|$)',text,re.S)
         if not m:return ''
@@ -47,7 +46,9 @@ class PixelOffice(QWidget):
     def __init__(self): super().__init__(); self.background=PixelBackground(); self.characters=CharacterLayer(); self.setMinimumHeight(560); self.active_ticker='MARKET'
     def set_weather(self,v): self.background.set_weather(v); self.update()
     def auto_time(self):
-        now=datetime.now(); self.background.set_clock(now); h=now.hour; return '아침' if 5<=h<11 else '낮' if 11<=h<17 else '저녁' if 17<=h<21 else '밤'
+        now=datetime.now(); self.background.set_clock(now); h=self.background.hour
+        self.characters.set_office_hours(h)
+        return '아침' if 5<=h<11 else '낮' if 11<=h<17 else '저녁' if 17<=h<21 else '밤'
     @staticmethod
     def rect(p,x,y,w,h,c): p.setPen(Qt.NoPen); p.setBrush(QColor(c)); p.drawRect(int(x),int(y),int(w),int(h))
     @staticmethod
@@ -95,15 +96,17 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__(); self.setWindowTitle('돈물원 · DONMULWON'); self.resize(1500,980); self.setMinimumSize(1180,820); self.setStyleSheet('QMainWindow{background:#101315;color:#ded7c5;} QLabel{color:#ded7c5;} QLineEdit,QPlainTextEdit,QComboBox{background:#1d2225;color:#eee4d2;border:1px solid #51483b;padding:7px;} QPushButton{background:#665039;color:#fff2d4;padding:8px 16px;border:1px solid #8a6c4c;} QProgressBar{border:1px solid #51483b;background:#202428;} QProgressBar::chunk{background:#806544;}')
         root=QWidget(); layout=QVBoxLayout(root); layout.setContentsMargins(14,10,14,10); layout.setSpacing(8); top=QHBoxLayout(); title=QLabel('🏦 DONMULWON · PIXEL TRADING OFFICE'); title.setStyleSheet('font-size:21px;font-weight:700;'); top.addWidget(title); top.addStretch(); self.clock=QLabel(); top.addWidget(self.clock); layout.addLayout(top); self.office=PixelOffice(); layout.addWidget(self.office,1)
-        controls=QHBoxLayout(); self.input=QLineEdit(); self.input.setPlaceholderText('예: JOBY 지금 사도 괜찮아? / 내 계좌 전체적으로 봐줘'); self.button=QPushButton('분석 시작'); self.button.clicked.connect(self.start_analysis); self.input.returnPressed.connect(self.start_analysis); self.weather=QComboBox(); self.weather.addItems(['맑음','비','눈']); self.weather.currentTextChanged.connect(self.office.set_weather); controls.addWidget(self.input,1); controls.addWidget(self.weather); controls.addWidget(self.button); layout.addLayout(controls); self.status=QLabel('대기 중 · 각 AI는 자기 책상에서 근무합니다.'); layout.addWidget(self.status); self.progress=QProgressBar(); self.progress.setRange(0,0); self.progress.hide(); layout.addWidget(self.progress); self.dialogue=DialoguePanel(); layout.addWidget(self.dialogue); self.raw=QPlainTextEdit(); self.raw.setReadOnly(True); self.raw.setMaximumHeight(90); self.raw.hide(); layout.addWidget(self.raw); self.setCentralWidget(root); self.thread=None; self.worker=None; self.timer=QTimer(self); self.timer.timeout.connect(self.update_clock); self.timer.timeout.connect(self.animate); self.timer.start(500); self.update_clock()
+        controls=QHBoxLayout(); self.input=QLineEdit(); self.input.setPlaceholderText('예: JOBY 지금 사도 괜찮아? / 내 계좌 전체적으로 봐줘'); self.button=QPushButton('분석 시작'); self.button.clicked.connect(self.start_analysis); self.input.returnPressed.connect(self.start_analysis); self.weather=QComboBox(); self.weather.addItems(['맑음','비','눈']); self.weather.currentTextChanged.connect(self.office.set_weather); controls.addWidget(self.input,1); controls.addWidget(self.weather); controls.addWidget(self.button); layout.addLayout(controls); self.status=QLabel('대기 중 · 실제 시각 기준 출근/퇴근 시스템'); layout.addWidget(self.status); self.progress=QProgressBar(); self.progress.setRange(0,0); self.progress.hide(); layout.addWidget(self.progress); self.dialogue=DialoguePanel(); layout.addWidget(self.dialogue); self.raw=QPlainTextEdit(); self.raw.setReadOnly(True); self.raw.hide(); self.raw.setMaximumHeight(120); layout.addWidget(self.raw); self.setCentralWidget(root); self.thread=None; self.worker=None; self.timer=QTimer(self); self.timer.timeout.connect(self.update_clock); self.timer.timeout.connect(self.animate); self.timer.start(500); self.update_clock()
     def animate(self): self.office.characters.tick(); self.office.update()
-    def update_clock(self): self.clock.setText(datetime.now().strftime('%Y-%m-%d  %H:%M:%S')+' · '+self.office.auto_time())
+    def update_clock(self):
+        now=datetime.now(); period=self.office.auto_time(); self.clock.setText(now.strftime('%Y-%m-%d  %H:%M:%S')+' · '+period); self.office.update()
     def start_analysis(self):
         q=self.input.text().strip()
         if not q or self.thread is not None:return
-        tickers=re.findall(r'\b[A-Z]{2,5}\b',q.upper()); self.office.set_ticker(tickers[0] if tickers else 'MARKET'); self.office.characters.summon_for_question(); self.button.setEnabled(False); self.progress.show(); self.status.setText('⚔️ 팀 회의 중 · 각자 분석 → 토론 → 알프레도 검증'); self.dialogue.setHtml('<div style="color:#bca87e;padding:16px">🐦 🐍 🦝 🐢 각자 자리에서 분석 중...<br>잠시 후 회의 테이블에서 의견을 합칩니다.</div>'); self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(self.on_output); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(self.on_done); self.thread.start()
-    def on_output(self,text): self.dialogue.set_meeting(text); self.raw.setPlainText(text); self.status.setText('🐱 알프레도 검증 완료 · 최종 판단 출력'); self.office.characters.summon_for_question(overtime=True)
-    def on_failed(self,error): self.raw.setPlainText(error); self.dialogue.setHtml('<div style="color:#d78f82;padding:16px">분석 중 오류가 발생했습니다.<br><br>하단 로그에서 오류 내용을 확인하세요.</div>'); self.status.setText('❌ 분석 오류')
-    def on_done(self): self.button.setEnabled(True); self.progress.hide(); self.thread=None; self.worker=None
+        self.button.setEnabled(False); self.progress.show(); self.dialogue.setHtml('<div style="color:#bca87e;padding:20px;">⚔ AI TRADING TEAM 회의 시작...<br><br>각자 독립 분석 중입니다.</div>'); self.status.setText('⚔️ AI TRADING TEAM 회의 진행 중...')
+        self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(self.on_output); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(self.analysis_done); self.thread.start()
+    def on_output(self,text): self.raw.setPlainText(text); self.dialogue.set_meeting(text)
+    def on_failed(self,err): self.raw.setPlainText(err); self.dialogue.setHtml('<div style="color:#e29a8d;padding:18px;">분석 실패<br><br>'+err.replace('&','&amp;').replace('<','&lt;')+'</div>')
+    def analysis_done(self): self.thread=None; self.worker=None; self.button.setEnabled(True); self.progress.hide(); self.status.setText('분석 완료 · 현재 시각 기준 사무실 상태 유지')
 if __name__=='__main__':
     app=QApplication(sys.argv); win=MainWindow(); win.show(); sys.exit(app.exec())
