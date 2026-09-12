@@ -3,6 +3,7 @@ import sys
 import json
 import importlib
 import time
+import re
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -22,13 +23,9 @@ os.makedirs(HISTORY_DIR, exist_ok=True)
 KNOWN_TICKERS = {"REKR":"Rekor Systems","ALAB":"Astera Labs","VOO":"Vanguard S&P 500 ETF","TTWO":"Take-Two Interactive","JEPQ":"JPMorgan Nasdaq Equity Premium Income ETF","JOBY":"Joby Aviation","TSLA":"Tesla","NVDA":"NVIDIA","AAPL":"Apple","MSFT":"Microsoft","GOOGL":"Alphabet","AMZN":"Amazon","META":"Meta"}
 TICKER_ALIASES = {"조비":"JOBY","조비에비에이션":"JOBY","조비 에비에이션":"JOBY","joby aviation":"JOBY","아스테라":"ALAB","아스테라랩스":"ALAB","아스테라 랩스":"ALAB","astera labs":"ALAB","리코":"REKR","리커":"REKR","리코 시스템즈":"REKR","리코르":"REKR","rekor systems":"REKR","브이오오":"VOO","s&p500":"VOO","s&p 500":"VOO","제프큐":"JEPQ","제이이피큐":"JEPQ","테슬라":"TSLA","엔비디아":"NVDA","애플":"AAPL","마이크로소프트":"MSFT","마소":"MSFT","알파벳":"GOOGL","구글":"GOOGL","아마존":"AMZN","메타":"META","테이크투":"TTWO","테이크 투":"TTWO"}
 
-
 def load_ai_modules():
     modules = {}
     original_key = os.environ.get("GEMINI_API_KEY")
-    # Some legacy role modules validate GEMINI_API_KEY during import even though
-    # their actual generation is routed through ai_router. A dummy value keeps
-    # import-time validation from blocking OpenRouter fallback.
     if not original_key:
         os.environ["GEMINI_API_KEY"] = "DUMMY_IMPORT_ONLY_KEY"
     try:
@@ -45,7 +42,6 @@ def load_ai_modules():
             os.environ["GEMINI_API_KEY"] = original_key
     return modules
 
-
 def save_json(path, data):
     try:
         with open(path, "w", encoding="utf-8") as f:
@@ -55,19 +51,16 @@ def save_json(path, data):
         print(f"⚠️ JSON 저장 실패: {type(e).__name__}: {e}")
         return False
 
-
 def normalize_result(result):
     if result is None: return ""
     if isinstance(result, str): return result
     try: return json.dumps(result, ensure_ascii=False, indent=2, default=str)
     except Exception: return str(result)
 
-
 def save_meeting_file(name, data):
     path = os.path.join(HISTORY_DIR, f"{name}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.json")
     save_json(path, data)
     return path
-
 
 def extract_tickers(text):
     if not text: return []
@@ -75,7 +68,6 @@ def extract_tickers(text):
     found = [ticker for ticker in KNOWN_TICKERS if ticker in upper]
     found += [ticker for alias, ticker in TICKER_ALIASES.items() if alias.lower() in lower]
     return list(dict.fromkeys(found))
-
 
 def detect_intent(text, tickers):
     t = (text or "").lower()
@@ -89,11 +81,9 @@ def detect_intent(text, tickers):
     if tickers: return "stock_decision" if any(x in t for x in trading) else "stock_analysis"
     return "general"
 
-
 def parse_question(question):
     tickers = extract_tickers(question)
     return {"question":question,"tickers":tickers,"intent":detect_intent(question,tickers),"primary_ticker":tickers[0] if tickers else None,"timestamp":datetime.now().isoformat()}
-
 
 def show_request(parsed):
     print("\n"+"="*70)
@@ -102,7 +92,6 @@ def show_request(parsed):
     print(f"사용자 질문 : {parsed['question']}")
     print(f"분석 유형   : {parsed['intent']}")
     print("분석 종목   : "+(", ".join(parsed["tickers"]) if parsed["tickers"] else "전체 시장 / 포트폴리오"))
-
 
 def get_account_data():
     print("\n🏦 토스증권 계좌정보를 확인하는 중...")
@@ -116,15 +105,10 @@ def get_account_data():
         print(f"❌ 토스 계좌정보 조회 실패: {type(e).__name__}: {e}")
         return {"status":"계좌정보 조회 실패","error":str(e),"account":{},"holdings":[],"cash":{}}
 
-
 def run_meeting(parsed, modules, account_data):
     from ai.batch_engine import run_team_batches
     from ai.data_cache import clear as clear_data_cache
-
-    # A cache belongs to one user question only. This prevents a second
-    # question asked shortly afterward from receiving stale market data.
     clear_data_cache()
-
     tickers = parsed.get("tickers",[])
     print("\n"+"="*70)
     print("⚔️ AI TRADING TEAM 회의")
@@ -134,7 +118,6 @@ def run_meeting(parsed, modules, account_data):
     started=time.time()
     team_results=run_team_batches(modules,tickers,account_data,max_workers=4)
     print(f"⏱️ 4인 독립 분석 완료 ({time.time()-started:.1f}초)")
-
     try:
         debate_module=importlib.import_module("ai.debate")
         print("\n⚔️ 4인 통합 토론 시작 (1회)")
@@ -142,15 +125,15 @@ def run_meeting(parsed, modules, account_data):
     except Exception as e:
         print(f"❌ 통합 토론 오류: {type(e).__name__}: {e}")
         debate_result={"initial_results":team_results,"final_positions":{},"meeting_summary":"","conflicts":[],"consensus":[],"important_corrections":[],"transcript":"","error":str(e)}
-
     package={"request":parsed,"account_data":account_data,"team_results":team_results,"debate":debate_result,"timestamp":datetime.now().isoformat()}
     save_meeting_file("team_meeting",package)
-
     cat_result=None
     cat=modules.get("cat")
     if cat is not None and callable(getattr(cat,"analyze",None)):
         print("\n🐱 알프레도 최종 검증 시작 (1회)")
         ticker_label=", ".join(tickers) if tickers else "전체 시장 / 포트폴리오"
+        # cat.py uses ticker in a history filename. Windows forbids slash and several other characters.
+        cat_filename_label = re.sub(r'[<>:"/\\|?*]', "_", ticker_label).strip(" .") or "MARKET"
         instruction=f"""
 [최종 사용자 화면 출력 규칙]
 너는 돈물원 트레이딩 팀의 최종 팀장이다.
@@ -164,12 +147,11 @@ def run_meeting(parsed, modules, account_data):
 """
         team_for_cat={key:{"file":None,"content":normalize_result(value)} for key,value in team_results.items()}
         try:
-            cat_result=cat.analyze(question=parsed["question"]+"\n\n"+instruction,ticker=ticker_label,team_analyses=team_for_cat,account_context=account_data)
+            cat_result=cat.analyze(question=parsed["question"]+"\n\n"+instruction,ticker=cat_filename_label,team_analyses=team_for_cat,account_context=account_data)
         except Exception as e:
             print(f"❌ 알프레도 오류: {type(e).__name__}: {e}")
     else:
         print("❌ 알프레도 모듈을 사용할 수 없습니다.")
-
     final_data={**package,"alfredo":normalize_result(cat_result)}
     final_path=save_meeting_file("final_meeting",final_data)
     print("\n"+"━"*70)
@@ -179,7 +161,6 @@ def run_meeting(parsed, modules, account_data):
     print("━"*70)
     print(f"💾 최종 회의록: {final_path}")
     return final_data
-
 
 def main():
     print("\n"+"="*70)
@@ -203,7 +184,6 @@ def main():
         account_data=get_account_data()
         save_json(AI_PORTFOLIO_FILE,account_data)
         run_meeting(parsed,modules,account_data)
-
 
 if __name__=="__main__":
     try: main()
