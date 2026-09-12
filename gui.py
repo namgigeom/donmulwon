@@ -41,7 +41,7 @@ class DialoguePanel(QTextBrowser):
         if not count: html+='<div style="padding:18px;color:#9f9687">회의 결과가 아직 없습니다.</div>'
         self.setHtml(html+'</div>')
 class PixelOffice(QWidget):
-    DESKS=[('김선달',80,250,180),('이묵',290,250,180),('너부리',500,250,180),('현무',710,250,180),('알프레도',1040,250,180)]
+    DESKS=[('현무',55,244,175),('김선달',320,244,175),('이묵',585,244,175),('너부리',850,244,175),('알프레도',1115,244,175)]
     ROLE={'김선달':'FUNDAMENTALS + NEWS','이묵':'TECHNICAL','너부리':'PORTFOLIO','현무':'MACRO','알프레도':'FINAL VERIFIER'}
     PORTFOLIO=[('VOO','51.9%','$702.56'),('JEPQ','13.0%','$59.78'),('TTWO','24.0%','$215.47'),('JOBY','5.6%','$6.39'),('ALAB','5.5%','$291.22')]
     def __init__(self): super().__init__(); self.background=PixelBackground(); self.characters=CharacterLayer(); self.setMinimumHeight(560); self.active_ticker='MARKET'
@@ -60,9 +60,7 @@ class PixelOffice(QWidget):
         for y in range(254,h-12,44): p.drawLine(18,y,w-18,y)
         p.setPen(Qt.NoPen); self.rect(p,34,58,82,120,'#3b2e27'); self.rect(p,40,64,70,108,'#514036'); self.text(p,44,68,62,16,'NOTICE',7,'#d0bb83',Qt.AlignCenter)
         for i,t in enumerate(['AI TEAM','MARKET','RULES','MEETING']): self.text(p,46,92+i*19,58,15,t,6,'#9e9481',Qt.AlignCenter)
-        # independent entrance
         self.rect(p,32,h-116,88,84,'#241c19'); self.rect(p,38,h-109,76,77,'#60432f'); self.rect(p,45,h-102,62,68,'#2b2b2c'); self.rect(p,98,h-67,5,5,'#d0ae65'); self.rect(p,42,h-126,68,16,'#28362d'); self.text(p,45,h-125,62,15,'EXIT',8,'#c9d2b4',Qt.AlignCenter)
-        # plant
         self.rect(p,w-100,202,8,35,'#4b3525'); self.rect(p,w-120,228,48,11,'#61432e'); self.rect(p,w-122,194,48,10,'#496a4c'); self.rect(p,w-112,183,28,20,'#557850')
     def tree(self,p,x,base,s):
         self.rect(p,x-3*s,base-28*s,6*s,28*s,'#3c2b20')
@@ -78,15 +76,13 @@ class PixelOffice(QWidget):
         p.setPen(QColor('#4b4034')); p.setBrush(Qt.NoBrush); p.drawRect(x,y,ww,wh)
         for xx in [x+ww//3,x+2*ww//3]: p.drawRect(xx,y,5,wh)
     def draw_furniture(self,p,w,h):
-        # central conference table and separate chairs
         x=w//2-150; y=h-175; self.rect(p,x-8,y-8,316,96,'#34271f'); self.rect(p,x,y,300,80,'#7a5337'); self.rect(p,x+8,y+8,284,64,'#63442f'); self.text(p,x+20,y+8,260,18,'AI TRADING TEAM · MEETING TABLE',8,'#e0c98e',Qt.AlignCenter); self.text(p,x+25,y+34,250,22,'DISCUSS · DISAGREE · VERIFY',7,'#a99d8c',Qt.AlignCenter)
         for cx,cy in [(x-32,y+25),(x+306,y+25),(x+55,y+88),(x+215,y+88)]: self.rect(p,cx,cy,32,25,'#382a23'); self.rect(p,cx+4,cy+4,24,17,'#67472f')
         sx=w-230; sy=h-155; self.rect(p,sx,sy,150,105,'#34261f'); self.rect(p,sx+8,sy+8,134,89,'#65462f')
         for i,t in enumerate(['RESEARCH','REPORTS','HISTORY']): self.rect(p,sx+16,sy+18+i*23,116,16,'#3a2b24'); self.text(p,sx+20,sy+18+i*23,108,16,t,6,'#c7b27d',Qt.AlignCenter)
     def draw_desks(self,p):
         for name,x,y,dw in self.DESKS:
-            self.rect(p,x+10,y+65,dw-20,12,'#30241e'); self.rect(p,x-4,y-4,dw+8,65,'#34261f'); self.rect(p,x,y,dw,56,'#775236'); self.rect(p,x+5,y+5,dw-10,46,'#89603e')
-            mx=x+dw//2-43; self.rect(p,mx,y+7,86,35,'#171b1e'); self.rect(p,mx+5,y+11,76,26,'#182b30'); self.rect(p,mx+32,y+42,22,7,'#1a1c1f'); self.rect(p,mx+20,y+49,46,4,'#302b27'); pts=[(mx+9,y+32),(mx+18,y+28),(mx+27,y+30),(mx+37,y+21),(mx+49,y+26),(mx+60,y+16),(mx+72,y+21)]; p.setPen(QColor('#d4bb76'))
+            self.rect(p,x+10,y+65,dw-20,12,'#30241e'); self.rect(p,x-4,y-4,dw+8,65,'#34261f'); self.rect(p,x,y,dw,56,'#775236'); self.rect(p,x+5,y+5,dw-10,46,'#89603e'); mx=x+dw//2-43; self.rect(p,mx,y+7,86,35,'#171b1e'); self.rect(p,mx+5,y+11,76,26,'#182b30'); self.rect(p,mx+32,y+42,22,7,'#1a1c1f'); self.rect(p,mx+20,y+49,46,4,'#302b27'); pts=[(mx+9,y+32),(mx+18,y+28),(mx+27,y+30),(mx+37,y+21),(mx+49,y+26),(mx+60,y+16),(mx+72,y+21)]; p.setPen(QColor('#d4bb76'))
             for a,b in zip(pts,pts[1:]): p.drawLine(*a,*b)
             p.setPen(Qt.NoPen); self.rect(p,x+12,y+13,24,3,'#a0744d'); self.rect(p,x+dw-42,y+13,28,3,'#5e3f2c'); self.rect(p,x+dw//2-34,y+47,68,6,'#303033'); self.rect(p,x+dw-29,y+43,12,9,'#4e6652'); self.rect(p,x+8,y+43,62,10,'#3a2b23'); self.text(p,x+10,y+47,60,12,name,6,'#e1cb91',Qt.AlignCenter); self.text(p,x,y+78,dw,18,self.ROLE[name],5,'#9f927d',Qt.AlignCenter)
     def draw_market(self,p,w):
