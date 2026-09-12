@@ -3,13 +3,15 @@ import sys
 import io
 import contextlib
 import traceback
+import re
+from datetime import datetime
 
-from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt
+from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt, QTimer
 from PySide6.QtGui import QFont, QPainter, QPen, QBrush, QColor
 from PySide6.QtWidgets import (
     QApplication, QFrame, QGraphicsScene, QGraphicsView, QHBoxLayout,
     QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QPlainTextEdit,
-    QProgressBar, QVBoxLayout, QWidget
+    QProgressBar, QVBoxLayout, QWidget, QComboBox
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -37,7 +39,7 @@ class AnalysisWorker(QObject):
             self.status.emit("토스증권 계좌정보를 확인하는 중...")
             account_data = backend.get_account_data()
             backend.save_json(backend.AI_PORTFOLIO_FILE, account_data)
-            self.status.emit("🐦 🐍 🦝 🐢 4인 분석 → 토론 → 🐱 알프레도 검증 중...")
+            self.status.emit("🐢 🐦 🐍 🦝 4인 분석 → 토론 → 🐱 알프레도 검증 중...")
             buffer = io.StringIO()
             with contextlib.redirect_stdout(buffer):
                 result = backend.run_meeting(parsed, modules, account_data)
@@ -50,7 +52,10 @@ class AnalysisWorker(QObject):
             self.failed.emit(traceback.format_exc())
 
 
-class OfficeView(QGraphicsView):
+class PixelOfficeView(QGraphicsView):
+    """Wide 2D pixel-art office scene. No 3D/isometric perspective."""
+    WEATHER = {"맑음": "clear", "비": "rain", "눈": "snow", "흐림": "cloud"}
+
     def __init__(self):
         super().__init__()
         self.setScene(QGraphicsScene(self))
@@ -59,8 +64,21 @@ class OfficeView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setFrameShape(QFrame.NoFrame)
-        self.setBackgroundBrush(QBrush(QColor("#17191d")))
-        self.draw_office()
+        self.weather = "clear"
+        self.anim_tick = 0
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._tick)
+        self.timer.start(350)
+        self.draw_scene()
+
+    def _tick(self):
+        self.anim_tick = (self.anim_tick + 1) % 12
+        if self.weather in ("rain", "snow"):
+            self.draw_scene()
+
+    def set_weather(self, value):
+        self.weather = self.WEATHER.get(value, "clear")
+        self.draw_scene()
 
     def rect(self, x, y, w, h, fill, stroke=None, width=1):
         pen = QPen(QColor(stroke or fill))
@@ -84,348 +102,292 @@ class OfficeView(QGraphicsView):
     def px(self, x, y, w, h, color):
         return self.rect(x, y, w, h, color)
 
-    def draw_office(self):
-        self.scene().clear()
-        self.scene().setSceneRect(0, 0, 1500, 760)
+    def draw_sky(self, wx, wy, ww, wh):
+        hour = datetime.now().hour
+        if 6 <= hour < 10:
+            sky, sky2, ground = "#9fb9c0", "#c7c7ad", "#5b6865"
+            label = "MORNING"
+        elif 10 <= hour < 17:
+            sky, sky2, ground = "#9fc1c9", "#d2d2bd", "#66706a"
+            label = "DAY"
+        elif 17 <= hour < 20:
+            sky, sky2, ground = "#9a8277", "#d1a77e", "#4f5350"
+            label = "SUNSET"
+        else:
+            sky, sky2, ground = "#202d4d", "#2d3a58", "#20252d"
+            label = "NIGHT"
+        if self.weather == "cloud":
+            sky, sky2 = "#6f7d82", "#929b96"
+        if self.weather in ("rain", "snow"):
+            sky, sky2 = ("#526576", "#6c7880") if self.weather == "rain" else ("#78848b", "#9ca5a7")
 
-        # Back wall.
-        self.rect(20, 20, 1460, 330, "#252a2d", "#596269", 2)
-        self.text(38, 35, "DONMULWON OFFICE  •  PIXEL OPERATIONS ROOM", 9, True, "#d9d1b8")
+        self.rect(wx, wy, ww, wh, sky, "#39464d", 3)
+        self.rect(wx + 3, wy + 3, ww - 6, 95, sky2)
+        self.text(wx + 16, wy + 12, label, 7, True, "#d7d0bc")
 
-        # Large window: deliberately isolated from the exit area.
-        wx, wy, ww, wh = 195, 65, 1010, 235
-        self.rect(wx, wy, ww, wh, "#9bb4bc", "#52636a", 3)
-        self.rect(wx + 3, wy + 3, ww - 6, 78, "#a9c7cf")
-        self.rect(wx + 3, wy + 81, ww - 6, 76, "#8fb0b8")
-        self.rect(wx + 3, wy + 157, ww - 6, 40, "#718b8f")
+        # Pixel clouds / stars.
+        if datetime.now().hour >= 20 or datetime.now().hour < 6:
+            for sx, sy in [(wx+90,wy+38),(wx+260,wy+24),(wx+590,wy+54),(wx+820,wy+29),(wx+980,wy+65)]:
+                self.px(sx, sy, 3, 3, "#d7d7c2")
+        else:
+            for sx, sy in [(wx+105,wy+42),(wx+430,wy+30),(wx+760,wy+48)]:
+                self.px(sx, sy, 22, 4, "#d8d5c3")
+                self.px(sx+7, sy-4, 10, 4, "#d8d5c3")
+
         buildings = [
-            (225, 207, 44, 48), (290, 184, 54, 71), (368, 214, 42, 41),
-            (440, 179, 60, 76), (530, 202, 46, 53), (606, 167, 58, 88),
-            (690, 197, 53, 58), (772, 178, 63, 77), (870, 205, 45, 50),
-            (944, 184, 57, 71), (1032, 170, 55, 85), (1110, 204, 43, 51)
+            (wx+15, 172, 55, 92), (wx+82, 148, 70, 116), (wx+170, 188, 48, 76),
+            (wx+232, 126, 74, 138), (wx+324, 164, 57, 100), (wx+395, 105, 78, 159),
+            (wx+492, 151, 61, 113), (wx+568, 121, 82, 143), (wx+668, 173, 56, 91),
+            (wx+740, 139, 76, 125), (wx+834, 102, 68, 162), (wx+920, 158, 58, 106),
+            (wx+992, 132, 82, 132)
         ]
         for bx, by, bw, bh in buildings:
-            self.rect(bx, by, bw, bh, "#59666a")
-            for yy in range(by + 10, by + bh - 5, 16):
-                for xx in range(bx + 8, bx + bw - 5, 15):
-                    self.rect(xx, yy, 5, 7, "#c9b77e")
-        self.rect(wx + 3, 255, ww - 6, 42, "#536966")
+            self.rect(bx, by, bw, bh, "#333b42")
+            self.rect(bx+5, by+5, bw-10, 5, "#22292f")
+            for yy in range(by+18, by+bh-8, 17):
+                for xx in range(bx+9, bx+bw-6, 16):
+                    lit = ((xx+yy)//7 + datetime.now().hour) % 4 != 0
+                    if lit:
+                        self.px(xx, yy, 5, 7, "#b9a86d")
+        # One tall pixel-art tower to echo the supplied reference without copying it.
+        tx, ty = wx + 410, 84
+        self.rect(tx, ty, 30, 180, "#252d35")
+        self.rect(tx+8, ty-30, 14, 30, "#252d35")
+        self.rect(tx+12, ty-42, 6, 12, "#4b5359")
+        for yy in range(ty+12, ty+168, 17):
+            self.px(tx+6, yy, 5, 7, "#b7a76c")
+            self.px(tx+18, yy+5, 5, 7, "#68747a")
+
+        self.rect(wx+3, 235, ww-6, 29, ground)
         for i in range(1, 5):
-            xx = wx + ww * i / 5
-            self.line(xx, wy, xx, wy + wh, "#52636a", 3)
-        self.line(wx, 255, wx + ww, 255, "#465b5f", 2)
+            xx = wx + ww*i/5
+            self.line(xx, wy, xx, wy+wh, "#46565d", 3)
+        self.line(wx, 235, wx+ww, 235, "#3c4b50", 2)
 
-        # Exit is a wall sign, not a giant door beside the window.
-        ex, ey = 48, 90
-        self.rect(ex, ey, 118, 135, "#1c2528", "#53615f", 2)
-        self.rect(ex + 12, ey + 12, 94, 72, "#263538")
-        self.rect(ex + 31, ey + 28, 56, 32, "#6c9b76")
-        self.text(ex + 43, ey + 31, "EXIT", 13, True, "#edf2d8")
-        self.line(ex + 59, ey + 63, ex + 59, ey + 49, "#edf2d8", 3)
-        self.line(ex + 45, ey + 57, ex + 59, ey + 44, "#edf2d8", 3)
-        self.line(ex + 73, ey + 57, ex + 59, ey + 44, "#edf2d8", 3)
-        self.text(ex + 19, ey + 96, "EMERGENCY EXIT", 7, True, "#d9d1b8")
-        self.text(ex + 25, ey + 111, "→ STAFF AREA", 6, False, "#8e9b91")
+        if self.weather == "rain":
+            for i in range(34):
+                x = wx + 15 + ((i*73 + self.anim_tick*13) % int(ww-30))
+                y = wy + 12 + ((i*41) % 205)
+                self.line(x, y, x-4, y+12, "#9eb6bf", 1)
+        elif self.weather == "snow":
+            for i in range(24):
+                x = wx + 12 + ((i*61 + self.anim_tick*5) % int(ww-24))
+                y = wy + 10 + ((i*47 + self.anim_tick*4) % 215)
+                self.px(x, y, 3, 3, "#e6e4d8")
 
-        # Large market monitor, with generous chart bounds so nothing is clipped.
-        px, py, pw, ph = 1230, 55, 235, 245
-        self.rect(px, py, pw, ph, "#20252a", "#a58b5b", 2)
-        self.text(px + 15, py + 12, "MARKET MONITOR", 11, True, "#e1d5b5")
-        self.text(px + 15, py + 35, "VOO", 8, True, "#b6b09f")
-        self.text(px + 51, py + 34, "$612.40", 10, True, "#8cc39e")
-        self.text(px + 142, py + 36, "+1.84%", 8, True, "#8cc39e")
+    def draw_scene(self):
+        self.scene().clear()
+        W, H = 1600, 820
+        self.scene().setSceneRect(0, 0, W, H)
+        self.rect(0, 0, W, H, "#171a1d")
+        # Wall / floor are deliberately flat 2D blocks.
+        self.rect(18, 18, 1564, 315, "#34393b", "#6a6b62", 2)
+        self.text(38, 31, "DONMULWON  •  AI TRADING OFFICE", 10, True, "#e1d4b7")
 
-        cx, cy, cw, ch = px + 16, py + 63, pw - 32, 105
-        self.rect(cx, cy, cw, ch, "#182023", "#46575a", 1)
-        for gy in (cy + 26, cy + 52, cy + 78):
-            self.line(cx + 5, gy, cx + cw - 5, gy, "#303c3e", 1)
-        values = [56, 51, 63, 59, 70, 65, 82, 76, 91, 84, 98, 90, 105, 99]
-        pts = []
-        for i, value in enumerate(values):
-            xx = cx + 8 + i * ((cw - 16) / (len(values) - 1))
-            yy = cy + ch - 8 - value * 0.72
-            pts.append((xx, yy))
-        for a, b in zip(pts, pts[1:]):
-            self.line(a[0], a[1], b[0], b[1], "#8cc39e", 3)
-        for xx, yy in pts:
-            self.rect(xx - 2, yy - 2, 4, 4, "#d7e3bd")
-        self.text(px + 16, py + 176, "1D PERFORMANCE", 7, True, "#8e9b91")
-        self.text(px + 16, py + 194, "ACCOUNT", 7, True, "#8e9b91")
-        self.text(px + 70, py + 191, "$1,124.19", 10, True, "#e1d5b5")
-        self.text(px + 16, py + 216, "VOL  1.24M   •   TREND  UP", 7, True, "#9e957f")
+        wx, wy, ww, wh = 205, 63, 1090, 242
+        self.draw_sky(wx, wy, ww, wh)
 
-        self.rect(30, 330, 1440, 14, "#16191b")
+        # Door at far left; window is never attached to the door.
+        ex, ey = 45, 93
+        self.rect(ex, ey, 122, 142, "#202629", "#65706d", 2)
+        self.rect(ex+12, ey+12, 98, 82, "#2b393c")
+        self.rect(ex+31, ey+28, 58, 34, "#708f76")
+        self.text(ex+42, ey+31, "EXIT", 12, True, "#f1ecd6")
+        self.text(ex+19, ey+105, "STAFF DOOR", 7, True, "#c9c0a5")
+        self.text(ex+19, ey+119, "HYEONMU SIDE", 6, False, "#8d9991")
+
+        # Market side monitor: intentionally compact so the office scene remains dominant.
+        px, py, pw, ph = 1310, 58, 240, 246
+        self.rect(px, py, pw, ph, "#202629", "#8e7b58", 2)
+        self.text(px+14, py+12, "MARKET", 9, True, "#e4d8bd")
+        self.text(px+14, py+31, "VOO", 8, True, "#a9b09e")
+        self.text(px+50, py+29, "$704.03", 10, True, "#91b69b")
+        self.text(px+145, py+31, "+5.96%", 7, True, "#91b69b")
+        cx, cy, cw, ch = px+14, py+55, pw-28, 112
+        self.rect(cx, cy, cw, ch, "#182022", "#435154", 1)
+        for gy in (cy+28, cy+56, cy+84): self.line(cx+5, gy, cx+cw-5, gy, "#2d383a", 1)
+        vals = [57, 52, 64, 60, 70, 67, 80, 76, 91, 84, 97, 91, 104, 101]
+        pts=[]
+        for i,v in enumerate(vals):
+            xx=cx+7+i*(cw-14)/(len(vals)-1); yy=cy+ch-8-v*.73; pts.append((xx,yy))
+        for a,b in zip(pts,pts[1:]): self.line(a[0],a[1],b[0],b[1],"#91b69b",3)
+        for xx,yy in pts: self.px(xx-2,yy-2,4,4,"#d6dfc6")
+        self.text(px+14, py+180, "ACCOUNT", 7, True, "#929b91")
+        self.text(px+72, py+177, "$1,124.19", 10, True, "#e0d5bb")
+        self.text(px+14, py+200, "JEPQ  13.0%", 7, True, "#b6ae9c")
+        self.text(px+14, py+218, "TTWO  24.2%", 7, True, "#b6ae9c")
+
+        self.rect(20, 328, 1560, 16, "#181b1d")
 
         agents = [
-            ("현무", "MACRO", "#56766d", "turtle"),
-            ("김선달", "FUNDAMENTAL + NEWS", "#9a7947", "crow"),
-            ("이묵", "TECHNICAL", "#426c83", "snake"),
-            ("너부리", "PORTFOLIO + ACCOUNT", "#80634e", "raccoon"),
-            ("알프레도", "TEAM LEAD / VERIFIER", "#a26d42", "cat"),
+            ("현무", "MACRO", "#5f8073", "turtle"),
+            ("김선달", "FUNDAMENTAL + NEWS", "#9b7b4a", "bird"),
+            ("이묵", "TECHNICAL", "#4f7488", "snake"),
+            ("너부리", "PORTFOLIO + ACCOUNT", "#836653", "raccoon"),
+            ("알프레도", "TEAM LEAD / VERIFIER", "#a97447", "cat"),
         ]
-        start_x, y, desk_w, gap = 45, 395, 270, 18
+        # Wide straight row. Alfredo is separate but aligned on the same floor line.
+        xs = [35, 335, 635, 935, 1265]
         for i, data in enumerate(agents):
-            self.draw_desk(start_x + i * (desk_w + gap), y, desk_w, *data, lead=(i == 4))
+            self.draw_agent(xs[i], 370, 275 if i<4 else 300, *data, lead=(i==4))
 
-        self.text(35, 705, "5 AI AGENTS  •  PIXEL SUITS  •  INDIVIDUAL DESKS  •  LIVE ANALYSIS ROOM", 8, True, "#9e957f")
+        self.text(36, 742, "PIXEL OFFICE  •  EACH AGENT HAS A SEPARATE DESK  •  LIVE MARKET PANEL", 8, True, "#a49b85")
+        self.text(1350, 742, datetime.now().strftime("%Y-%m-%d  %H:%M"), 8, True, "#a49b85")
 
-    def draw_desk(self, x, y, w, name, role, accent, kind, lead=False):
-        # Chair behind the character.
-        self.rect(x + w / 2 - 27, y + 124, 54, 65, "#292b2e", "#111315", 2)
-        self.rect(x + w / 2 - 36, y + 177, 72, 9, "#111315")
-        self.draw_character(x + w / 2, y + 5, kind, accent)
+    def draw_agent(self, x, y, w, name, role, accent, kind, lead=False):
+        # Back chair.
+        self.rect(x+w/2-29, y+115, 58, 65, "#292d30", "#151719", 2)
+        self.rect(x+w/2-39, y+169, 78, 9, "#141719")
+        self.draw_character(x+w/2, y+8, kind, accent)
 
-        # Desk + monitor.
-        self.rect(x + 10, y + 98, w - 20, 72, "#15191b", "#a58b5b", 2)
-        self.rect(x + 28, y + 109, w - 56, 48, "#29383c", "#53686b", 2)
-        self.rect(x + 39, y + 119, w - 78, 3, accent)
-        self.rect(x + 39, y + 129, w - 78, 3, "#52615e")
-        self.rect(x + 39, y + 139, w - 78, 3, "#52615e")
-        self.rect(x + 10, y + 172, w - 20, 18, accent)
-        self.rect(x + 10, y + 190, w - 20, 43, "#5a3f2c", "#33251c", 1)
-        self.rect(x + 30, y + 233, 9, 50, "#29201a")
-        self.rect(x + w - 39, y + 233, 9, 50, "#29201a")
-        self.rect(x + 5, y + 283, w - 10, 8, "#191b1c")
-        self.rect(x + 20, y + 298, w - 40, 29, "#20252a", "#695c48", 1)
-        self.text(x + 31, y + 301, name, 10, True, "#eee5cc")
-        self.text(x + 31, y + 315, role, 6, True, "#9e957f", w - 62)
+        # Desk: one horizontal plane, no perspective.
+        self.rect(x+10, y+92, w-20, 15, "#aa8a5b", "#4b3926", 2)
+        self.rect(x+18, y+107, w-36, 56, "#553d2b", "#30251d", 2)
+        self.rect(x+31, y+116, w-62, 41, "#1c272a", "#64706b", 2)
+        self.rect(x+42, y+126, w-84, 4, accent)
+        self.rect(x+42, y+137, w-84, 3, "#56605e")
+        self.rect(x+42, y+147, w-84, 3, "#56605e")
+        self.rect(x+23, y+163, w-46, 13, accent)
+        self.rect(x+32, y+176, 10, 48, "#2b211a")
+        self.rect(x+w-42, y+176, 10, 48, "#2b211a")
+        self.rect(x+6, y+221, w-12, 7, "#17191a")
+        self.rect(x+20, y+238, w-40, 30, "#202529", "#665c4c", 1)
+        self.text(x+30, y+241, name, 10, True, "#eee6d2")
+        self.text(x+30, y+255, role, 6, True, "#a39a86", w-60)
         if lead:
-            self.rect(x + w - 88, y + 304, 55, 15, "#a26d42")
-            self.text(x + w - 83, y + 305, "LEAD", 6, True, "#fff1d0")
+            self.rect(x+w-82, y+240, 54, 15, "#a97447")
+            self.text(x+w-77, y+241, "LEAD", 6, True, "#fff0d2")
 
     def draw_character(self, cx, y, kind, accent):
-        # Small-pixel sprite: 3-5 px blocks, many individual marks.
-        dark = "#1a1d20"
-        light = "#e7e0cf"
-        shirt = "#ded8c8"
-        suit = accent
-        # Body / suit silhouette.
-        self.px(cx - 18, y + 48, 36, 30, suit)
-        self.px(cx - 13, y + 43, 26, 8, shirt)
-        self.px(cx - 3, y + 45, 6, 30, dark)
-        self.px(cx - 17, y + 54, 6, 21, suit)
-        self.px(cx + 11, y + 54, 6, 21, suit)
-        self.px(cx - 2, y + 49, 4, 10, "#25282b")
-        self.px(cx - 7, y + 75, 6, 5, dark)
-        self.px(cx + 1, y + 75, 6, 5, dark)
-
-        if kind == "turtle":
-            skin, shell, shade = "#78a087", "#36594f", "#507965"
-            self.px(cx - 17, y + 13, 34, 34, skin)
-            self.px(cx - 21, y + 20, 5, 17, shade)
-            self.px(cx + 16, y + 20, 5, 17, shade)
-            self.px(cx - 16, y + 7, 32, 8, shell)
-            self.px(cx - 11, y + 3, 22, 5, shell)
-            self.px(cx - 12, y + 17, 7, 5, "#b5c7a5")
-            self.px(cx + 5, y + 17, 7, 5, "#b5c7a5")
-            self.px(cx - 10, y + 23, 5, 5, dark)
-            self.px(cx + 5, y + 23, 5, 5, dark)
-            self.px(cx - 4, y + 31, 8, 4, shade)
-            self.px(cx - 7, y + 36, 14, 3, "#557a67")
-
-        elif kind == "crow":
-            feather, black = "#3a3e43", "#202326"
-            self.px(cx - 17, y + 13, 34, 34, feather)
-            self.px(cx - 13, y + 5, 7, 11, black)
-            self.px(cx - 3, y + 1, 7, 15, black)
-            self.px(cx + 7, y + 6, 7, 10, black)
-            self.px(cx - 10, y + 19, 7, 5, "#d8cfb2")
-            self.px(cx + 4, y + 19, 7, 5, "#d8cfb2")
-            self.px(cx - 8, y + 21, 4, 5, dark)
-            self.px(cx + 5, y + 21, 4, 5, dark)
-            self.px(cx + 16, y + 25, 13, 5, "#c18a45")
-            self.px(cx - 5, y + 31, 10, 3, "#b47448")
-            self.px(cx - 15, y + 39, 7, 5, black)
-            self.px(cx + 8, y + 39, 7, 5, black)
-
-        elif kind == "snake":
-            green, shade = "#527d5d", "#31553d"
-            self.px(cx - 17, y + 12, 34, 35, green)
-            self.px(cx - 12, y + 6, 9, 10, shade)
-            self.px(cx + 4, y + 5, 9, 11, shade)
-            self.px(cx - 11, y + 20, 7, 6, "#e4d49f")
-            self.px(cx + 4, y + 20, 7, 6, "#e4d49f")
-            self.px(cx - 9, y + 21, 4, 4, dark)
-            self.px(cx + 6, y + 21, 4, 4, dark)
-            self.px(cx - 3, y + 30, 6, 6, "#d76d70")
-            self.px(cx - 8, y + 36, 6, 3, "#d76d70")
-            self.px(cx + 2, y + 36, 6, 3, "#d76d70")
-            self.px(cx - 15, y + 41, 6, 4, shade)
-            self.px(cx + 9, y + 41, 6, 4, shade)
-
-        elif kind == "raccoon":
-            fur, mask = "#8b8077", "#454747"
-            self.px(cx - 17, y + 12, 34, 35, fur)
-            self.px(cx - 16, y + 5, 9, 10, mask)
-            self.px(cx + 7, y + 5, 9, 10, mask)
-            self.px(cx - 17, y + 21, 34, 12, mask)
-            self.px(cx - 10, y + 22, 7, 6, "#e2d5b5")
-            self.px(cx + 3, y + 22, 7, 6, "#e2d5b5")
-            self.px(cx - 8, y + 23, 4, 4, dark)
-            self.px(cx + 4, y + 23, 4, 4, dark)
-            self.px(cx - 4, y + 31, 8, 5, dark)
-            self.px(cx - 18, y + 38, 5, 8, mask)
-            self.px(cx + 13, y + 38, 5, 8, mask)
-
+        # Detailed 2D pixel sprite. Suits are mandatory; silhouette is built from small blocks.
+        dark="#181b1d"; outline="#24282a"; skin="#e8e1ce"; shirt="#ddd8c9"
+        suit=accent
+        # legs / suit jacket
+        self.px(cx-18,y+61,36,30,suit); self.px(cx-16,y+87,12,12,dark); self.px(cx+4,y+87,12,12,dark)
+        self.px(cx-12,y+48,24,13,shirt); self.px(cx-3,y+49,6,34,dark); self.px(cx-18,y+56,6,26,suit); self.px(cx+12,y+56,6,26,suit)
+        self.px(cx-7,y+57,4,8,"#bda66c"); self.px(cx+3,y+57,4,8,"#bda66c")
+        # head varies by mascot
+        if kind=="turtle":
+            shell="#34594e"; mid="#6f947f"; skin2="#88aa8e"
+            self.px(cx-19,y+15,38,36,shell); self.px(cx-24,y+23,5,15,mid); self.px(cx+19,y+23,5,15,mid)
+            self.px(cx-14,y+10,28,9,shell); self.px(cx-13,y+17,26,28,skin2)
+            self.px(cx-9,y+21,7,6,"#d1d9bd"); self.px(cx+3,y+21,7,6,"#d1d9bd")
+            self.px(cx-7,y+23,4,4,dark); self.px(cx+4,y+23,4,4,dark); self.px(cx-5,y+34,10,4,"#4c735f")
+            self.px(cx-15,y+5,30,5,"#243f38"); self.px(cx-8,y+1,16,4,"#243f38")
+        elif kind=="bird":
+            feather="#3b3f42"; beak="#b7904f"
+            self.px(cx-17,y+17,34,32,feather); self.px(cx-12,y+9,24,12,feather); self.px(cx-6,y+4,12,7,feather)
+            self.px(cx+16,y+24,10,6,beak); self.px(cx-10,y+20,6,6,"#d8d0b8"); self.px(cx+4,y+20,6,6,"#d8d0b8")
+            self.px(cx-8,y+22,4,4,dark); self.px(cx+6,y+22,4,4,dark); self.px(cx-4,y+32,8,5,"#555b5c")
+        elif kind=="snake":
+            green="#567763"; light="#88a07c"
+            self.px(cx-14,y+9,28,8,green); self.px(cx-20,y+17,40,27,green); self.px(cx-13,y+43,26,8,light)
+            self.px(cx-10,y+20,7,6,"#cbd2b8"); self.px(cx+3,y+20,7,6,"#cbd2b8"); self.px(cx-8,y+22,4,4,dark); self.px(cx+5,y+22,4,4,dark)
+            self.px(cx-18,y+29,6,6,light); self.px(cx+12,y+29,6,6,light); self.px(cx+12,y+45,14,4,"#7c4e42")
+        elif kind=="raccoon":
+            fur="#6e625a"; mask="#292a2b"; lightfur="#aaa08f"
+            self.px(cx-19,y+16,38,31,fur); self.px(cx-13,y+8,26,11,fur); self.px(cx-15,y+4,7,7,fur); self.px(cx+8,y+4,7,7,fur)
+            self.px(cx-15,y+19,30,12,mask); self.px(cx-11,y+21,7,6,"#d9d3c2"); self.px(cx+4,y+21,7,6,"#d9d3c2")
+            self.px(cx-9,y+23,4,4,dark); self.px(cx+5,y+23,4,4,dark); self.px(cx-5,y+33,10,5,lightfur)
         else:
-            # Alfredo: cat + small glasses + neat team-lead suit.
-            fur, ear = "#c79770", "#6e493c"
-            self.px(cx - 18, y + 12, 36, 34, fur)
-            self.px(cx - 17, y + 4, 11, 12, ear)
-            self.px(cx + 6, y + 4, 11, 12, ear)
-            self.px(cx - 14, y + 7, 7, 7, fur)
-            self.px(cx + 7, y + 7, 7, 7, fur)
-            # glasses frames are intentionally pixel-thin.
-            self.px(cx - 13, y + 20, 11, 7, "#d6ddd7")
-            self.px(cx + 2, y + 20, 11, 7, "#d6ddd7")
-            self.px(cx - 2, y + 22, 4, 3, dark)
-            self.px(cx - 10, y + 22, 4, 4, dark)
-            self.px(cx + 6, y + 22, 4, 4, dark)
-            self.px(cx - 4, y + 31, 8, 4, "#58372d")
-            self.px(cx - 11, y + 38, 8, 4, fur)
-            self.px(cx + 3, y + 38, 8, 4, fur)
-            # Bow tie.
-            self.px(cx - 7, y + 46, 6, 5, "#2a2020")
-            self.px(cx + 1, y + 46, 6, 5, "#2a2020")
-            self.px(cx - 2, y + 47, 4, 4, "#d0a45d")
-
-        self.px(cx - 10, y + 48, 5, 5, light)
-        self.px(cx + 5, y + 48, 5, 5, light)
+            fur="#8b6c58"; lightfur="#c6a98a"
+            self.px(cx-18,y+15,36,34,fur); self.px(cx-13,y+7,26,12,fur); self.px(cx-16,y+3,8,9,fur); self.px(cx+8,y+3,8,9,fur)
+            self.px(cx-11,y+19,7,7,"#eee4cd"); self.px(cx+4,y+19,7,7,"#eee4cd"); self.px(cx-8,y+21,4,4,dark); self.px(cx+5,y+21,4,4,dark)
+            self.px(cx-4,y+31,8,5,"#392b26"); self.px(cx-6,y+38,12,4,lightfur)
+        # suit collar / tie pixels over mascot body
+        self.px(cx-13,y+49,7,4,shirt); self.px(cx+6,y+49,7,4,shirt); self.px(cx-3,y+51,6,13,"#25282a")
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DONMULWON · AI TRADING TEAM")
-        self.resize(1500, 900)
+        self.setWindowTitle("돈물원 — DONMULWON AI Trading Team")
+        self.resize(1500, 980)
+        self.setMinimumSize(1180, 800)
         self.worker_thread = None
         self.worker = None
-        self.build_ui()
 
-    def build_ui(self):
-        root = QWidget()
-        self.setCentralWidget(root)
-        main = QVBoxLayout(root)
-        main.setContentsMargins(24, 20, 24, 20)
-        main.setSpacing(10)
+        root = QWidget(); self.setCentralWidget(root)
+        root.setStyleSheet("QWidget{background:#171a1d;color:#e7dfcb;} QLabel{font-family:'Malgun Gothic';}")
+        layout = QVBoxLayout(root); layout.setContentsMargins(10,10,10,10); layout.setSpacing(8)
 
         header = QHBoxLayout()
-        brand = QVBoxLayout()
-        logo = QLabel("돈물원  DONMULWON")
-        logo.setObjectName("logo")
-        subtitle = QLabel("AI TRADING TEAM  •  PIXEL OPERATIONS ROOM")
-        subtitle.setObjectName("subtitle")
-        brand.addWidget(logo)
-        brand.addWidget(subtitle)
-        header.addLayout(brand)
-        header.addStretch()
-        self.status = QLabel("● SYSTEM READY")
-        self.status.setObjectName("status")
-        header.addWidget(self.status, alignment=Qt.AlignTop)
-        main.addLayout(header)
+        title = QLabel("DONMULWON  /  돈물원")
+        title.setStyleSheet("font-size:25px;font-weight:700;color:#dfcfaa;")
+        header.addWidget(title)
+        sub = QLabel("AI TRADING TEAM")
+        sub.setStyleSheet("font-size:11px;color:#9d9a8b;")
+        header.addWidget(sub); header.addStretch()
+        self.weather = QComboBox(); self.weather.addItems(["맑음","흐림","비","눈"])
+        self.weather.setStyleSheet("QComboBox{background:#24292c;border:1px solid #615947;padding:6px;color:#e5dcc7;} QComboBox QAbstractItemView{background:#24292c;color:#e5dcc7;}")
+        self.weather.currentTextChanged.connect(self._weather_changed)
+        header.addWidget(QLabel("날씨")); header.addWidget(self.weather)
+        self.clock = QLabel(); self.clock.setStyleSheet("font-size:11px;color:#aaa18c;padding-left:12px;"); header.addWidget(self.clock)
+        layout.addLayout(header)
 
-        self.office = OfficeView()
-        main.addWidget(self.office, 1)
+        self.office = PixelOfficeView()
+        layout.addWidget(self.office, 1)
 
-        command = QFrame()
-        command.setObjectName("command")
-        row = QHBoxLayout(command)
-        row.setContentsMargins(12, 8, 12, 8)
-        self.input = QLineEdit()
-        self.input.setPlaceholderText("무엇이든 물어보세요  ·  예: SOFI 지금 사도 괜찮아?")
+        bottom = QFrame(); bottom.setStyleSheet("QFrame{background:#24292c;border:1px solid #5c5445;border-radius:8px;}")
+        bl = QHBoxLayout(bottom); bl.setContentsMargins(12,10,12,10)
+        self.input = QLineEdit(); self.input.setPlaceholderText("무엇을 분석할까요?  예: VOO랑 JEPQ 추가매수했는데 어때?")
+        self.input.setStyleSheet("QLineEdit{background:#171a1d;border:1px solid #625945;border-radius:6px;padding:10px;color:#eee5d0;font-size:13px;}" )
         self.input.returnPressed.connect(self.start_analysis)
-        self.button = QPushButton("분석 시작  ▶")
-        self.button.clicked.connect(self.start_analysis)
-        row.addWidget(self.input, 1)
-        row.addWidget(self.button)
-        main.addWidget(command)
+        bl.addWidget(self.input, 1)
+        self.button = QPushButton("분석 시작")
+        self.button.setStyleSheet("QPushButton{background:#80653f;color:#fff0d3;border:0;border-radius:6px;padding:10px 20px;font-weight:700;} QPushButton:disabled{background:#49443b;color:#8c887d;}")
+        self.button.clicked.connect(self.start_analysis); bl.addWidget(self.button)
+        layout.addWidget(bottom)
 
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 0)
-        self.progress.setVisible(False)
-        self.progress.setFixedHeight(5)
-        main.addWidget(self.progress)
-        self.setStyleSheet(self.styles())
+        self.status = QLabel("대기 중 · 사무실 운영 정상")
+        self.status.setStyleSheet("color:#a9a28f;font-size:11px;padding:2px 4px;")
+        layout.addWidget(self.status)
+        self.progress = QProgressBar(); self.progress.setRange(0,0); self.progress.setVisible(False)
+        self.progress.setStyleSheet("QProgressBar{background:#202427;border:0;height:4px;} QProgressBar::chunk{background:#8b7350;}")
+        layout.addWidget(self.progress)
 
-    def styles(self):
-        return """
-        QWidget { background:#17191d; color:#e8dfc9; font-family:'Malgun Gothic'; }
-        QMainWindow { background:#17191d; }
-        QLabel#logo { font-size:22px; font-weight:800; color:#eee5cc; }
-        QLabel#subtitle { color:#8e9b91; font-size:10px; font-weight:700; }
-        QLabel#status { color:#7eb392; font-size:10px; font-weight:800; }
-        QFrame#command { background:#22272b; border:1px solid #4b5356; border-radius:9px; }
-        QLineEdit { background:transparent; border:0; color:#f4ead0; padding:7px; font-size:12px; }
-        QLineEdit::placeholder { color:#777d7e; }
-        QPushButton { background:#9b6838; color:white; border:0; border-radius:7px; padding:10px 20px; font-weight:800; }
-        QPushButton:disabled { background:#4c4d49; }
-        QProgressBar { background:#353b3e; border:0; border-radius:2px; }
-        QProgressBar::chunk { background:#668e78; border-radius:2px; }
-        """
+        self.output = QPlainTextEdit(); self.output.setReadOnly(True); self.output.setPlaceholderText("분석 결과가 여기에 표시됩니다.")
+        self.output.setStyleSheet("QPlainTextEdit{background:#111416;border:1px solid #4b4539;color:#ded7c5;font-family:'Malgun Gothic';font-size:12px;padding:8px;}")
+        self.output.setMaximumHeight(235)
+        layout.addWidget(self.output)
+
+        self.clock_timer = QTimer(self); self.clock_timer.timeout.connect(self._clock); self.clock_timer.start(1000); self._clock()
+
+    def _clock(self):
+        self.clock.setText(datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))
+
+    def _weather_changed(self, value):
+        self.office.set_weather(value)
+        self.status.setText(f"사무실 환경 · {value} · 2D PIXEL MODE")
 
     def start_analysis(self):
         question = self.input.text().strip()
-        if not question:
-            QMessageBox.information(self, "돈물원", "분석할 질문을 입력해주세요.")
-            return
-        self.set_busy(True)
-        self.status.setText("● ANALYZING")
-        self.worker_thread = QThread()
-        self.worker = AnalysisWorker(question)
-        self.worker.moveToThread(self.worker_thread)
-        self.worker_thread.started.connect(self.worker.run)
-        self.worker.status.connect(self.status.setText)
-        self.worker.output.connect(self.show_result)
-        self.worker.finished.connect(self.analysis_finished)
-        self.worker.failed.connect(self.analysis_failed)
-        self.worker.finished.connect(self.worker_thread.quit)
-        self.worker.failed.connect(self.worker_thread.quit)
-        self.worker_thread.finished.connect(self.cleanup_worker)
-        self.worker_thread.start()
+        if not question: return
+        self.button.setEnabled(False); self.input.setEnabled(False); self.progress.setVisible(True)
+        self.status.setText("AI 팀 분석 진행 중...")
+        self.output.clear()
+        self.worker_thread = QThread(self); self.worker = AnalysisWorker(question); self.worker.moveToThread(self.worker_thread)
+        self.worker.status.connect(self.status.setText); self.worker.output.connect(self.output.setPlainText)
+        self.worker.finished.connect(self._analysis_finished); self.worker.failed.connect(self._analysis_failed)
+        self.worker_thread.started.connect(self.worker.run); self.worker_thread.start()
 
-    def set_busy(self, busy):
-        self.input.setDisabled(busy)
-        self.button.setDisabled(busy)
-        self.progress.setVisible(busy)
+    def _analysis_finished(self):
+        self.progress.setVisible(False); self.button.setEnabled(True); self.input.setEnabled(True); self.status.setText("분석 완료 · 알프레도 최종 검증 완료")
+        self._cleanup_thread()
 
-    @Slot(str)
-    def show_result(self, text):
-        self.result_window = QMainWindow(self)
-        self.result_window.setWindowTitle("🐱 알프레도 · 최종 판단")
-        self.result_window.resize(820, 650)
-        editor = QPlainTextEdit()
-        editor.setReadOnly(True)
-        editor.setPlainText(text)
-        editor.setStyleSheet("background:#20252a; color:#eee5cc; padding:16px; font-size:12px;")
-        self.result_window.setCentralWidget(editor)
-        self.result_window.show()
+    def _analysis_failed(self, error):
+        self.progress.setVisible(False); self.button.setEnabled(True); self.input.setEnabled(True); self.status.setText("분석 실패 · 오류 내용을 결과창에서 확인")
+        self.output.setPlainText(error); self._cleanup_thread()
 
-    @Slot()
-    def analysis_finished(self):
-        self.set_busy(False)
-        self.status.setText("● SYSTEM READY")
-
-    @Slot(str)
-    def analysis_failed(self, error):
-        self.set_busy(False)
-        self.status.setText("● ERROR")
-        QMessageBox.critical(self, "분석 오류", error)
-
-    def cleanup_worker(self):
-        if self.worker:
-            self.worker.deleteLater()
+    def _cleanup_thread(self):
         if self.worker_thread:
-            self.worker_thread.deleteLater()
-        self.worker = None
-        self.worker_thread = None
+            self.worker_thread.quit(); self.worker_thread.wait(3000); self.worker_thread.deleteLater(); self.worker_thread=None; self.worker=None
 
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("DONMULWON")
-    app.setFont(QFont("Malgun Gothic", 10))
-    window = MainWindow()
-    window.show()
+    app.setStyle("Fusion")
+    win = MainWindow(); win.show()
     sys.exit(app.exec())
 
 
