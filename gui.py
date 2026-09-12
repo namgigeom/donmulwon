@@ -5,7 +5,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt, QRect, QTimer
 from PySide6.QtGui import QPainter, QColor, QFont
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QPlainTextEdit, QProgressBar, QComboBox
 from gui_background import PixelBackground
-from gui_characters import CharacterLayer
+from gui_characters_v2 import CharacterLayer
 from gui_motion import MotionController
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -87,7 +87,6 @@ class MainWindow(QMainWindow):
     def start_analysis(self):
         q=self.input.text().strip()
         if not q or self.thread is not None:return
-        # A question is an office event: after hours the team rushes back; near closing they stay late.
         behavior=self.office.motion.on_question()
         if behavior=='summoned': self.status.setText('🏃 퇴근 후 긴급 호출 · AI TRADING TEAM 복귀 중...')
         elif behavior=='overtime': self.status.setText('🌙 야근 모드 · AI TRADING TEAM 회의 시작')
