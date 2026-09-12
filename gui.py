@@ -31,17 +31,23 @@ class AnalysisWorker(QObject):
             self.failed.emit(traceback.format_exc())
 
 class PixelAgent:
+    # name -> (sprite type, x, y, role)
+    # NOTE: coordinates are integers. The previous version accidentally stored
+    # (x, y) as one tuple, which caused: str + int TypeError during painting.
     DATA={
-        '현무':('turtle',(72,480),'slow'), '김선달':('bird',(330,480),'read'),
-        '이묵':('snake',(588,480),'chart'), '너부리':('raccoon',(846,480),'account'),
-        '알프레도':('cat',(1110,458),'lead')}
+        '현무':('turtle',72,480,'slow'),
+        '김선달':('bird',330,480,'read'),
+        '이묵':('snake',588,480,'chart'),
+        '너부리':('raccoon',846,480,'account'),
+        '알프레도':('cat',1110,458,'lead')
+    }
     def __init__(self,name): self.name=name; self.state='idle'; self.frame=0
     def tick(self): self.frame=(self.frame+1)%24
     def paint(self,p,x,y,scale=4):
         colors={'turtle':('#47745a','#294637','#d7c49c'),'bird':('#a75b3b','#e2c18b','#332d31'),
                 'snake':('#536b49','#27352a','#c9ad72'),'raccoon':('#73706c','#39383a','#b99362'),
                 'cat':('#b47a52','#4a3031','#d8c3a0')}
-        typ=self.DATA[self.name][0]; c1,c2,c3=map(QColor,colors[typ]); ox=x; oy=y
+        typ=self.DATA[self.name][0]; c1,c2,c3=map(QColor,colors[typ]); ox=int(x); oy=int(y); scale=int(scale)
         p.setPen(Qt.NoPen); p.setBrush(QColor(25,23,22,100)); p.drawRect(ox+12*scale,oy+76*scale,30*scale,4*scale)
         p.setBrush(c2); p.drawRect(ox+18*scale,oy+57*scale,9*scale,22*scale); p.drawRect(ox+37*scale,oy+57*scale,9*scale,22*scale)
         p.setBrush(QColor('#1f2529')); p.drawRect(ox+12*scale,oy+32*scale,40*scale,29*scale)
@@ -78,7 +84,9 @@ class PixelOffice(QWidget):
         p.setPen(Qt.NoPen); p.setBrush(QColor('#3c2a20')); p.drawRect(28,345,88,145); p.setBrush(QColor('#8d6a43')); p.drawRect(38,355,68,125); p.setBrush(QColor('#d7bd84')); p.drawRect(88,417,5,5)
         self.draw_desks(p)
         for n,a in self.agents.items():
-            x,y,_=PixelAgent.DATA[n]; a.paint(p,x,y,4); p.setPen(QColor('#eee4d2')); p.setFont(QFont('Malgun Gothic',11,QFont.Bold)); p.drawText(x-5,y+325,130,24,n)
+            x,y,_=PixelAgent.DATA[n][1:]
+            a.paint(p,x,y,4)
+            p.setPen(QColor('#eee4d2')); p.setFont(QFont('Malgun Gothic',11,QFont.Bold)); p.drawText(x-5,y+325,130,24,n)
         if self.weather in ('비','눈'): self.draw_weather(p)
         p.setPen(QColor('#cbb98e')); p.setFont(QFont('Malgun Gothic',10)); p.drawText(40,h-22,f'2D PIXEL OFFICE · {self.time} · {self.weather}')
     def draw_city(self,p,x,y,w,h):
