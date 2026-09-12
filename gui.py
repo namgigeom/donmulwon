@@ -64,21 +64,16 @@ class PixelOffice(QWidget):
         self.rect(p,32,h-116,88,84,'#241c19'); self.rect(p,38,h-109,76,77,'#60432f'); self.rect(p,45,h-102,62,68,'#2b2b2c'); self.rect(p,98,h-67,5,5,'#d0ae65'); self.rect(p,42,h-126,68,16,'#28362d'); self.text(p,45,h-125,62,15,'EXIT',8,'#c9d2b4',Qt.AlignCenter)
         self.rect(p,w-100,202,8,35,'#4b3525'); self.rect(p,w-120,228,48,11,'#61432e'); self.rect(p,w-122,194,48,10,'#496a4c'); self.rect(p,w-112,183,28,20,'#557850')
     def tree(self,p,x,base,s,phase):
-        leaf={'아침':'#587b55','낮':'#466f4a','저녁':'#4b5541','밤':'#26382d'}[phase]
-        leaf2={'아침':'#73956a','낮':'#5b8054','저녁':'#60664b','밤':'#304a38'}[phase]
+        leaf={'아침':'#587b55','낮':'#466f4a','저녁':'#4b5541','밤':'#26382d'}[phase]; leaf2={'아침':'#73956a','낮':'#5b8054','저녁':'#60664b','밤':'#304a38'}[phase]
         self.rect(p,x-3*s,base-28*s,6*s,28*s,'#3c2b20')
         for dx,dy,ww,hh in [(-17,-40,34,15),(-24,-31,48,17),(-12,-51,28,16),(3,-35,26,14)]: self.rect(p,x+dx*s,base+dy*s,ww*s,hh*s,leaf)
         self.rect(p,x-8*s,base-45*s,13*s,8*s,leaf2)
     def draw_window(self,p,w):
-        x,y,ww,wh=145,60,max(540,w-620),125
-        hour=self.background.hour
-        phase='아침' if 5<=hour<8 else '낮' if 8<=hour<17 else '저녁' if 17<=hour<21 else '밤'
-        sky={'아침':'#b97972','낮':'#a8ced8','저녁':'#c67869','밤':'#101a2d'}[phase]
-        horizon={'아침':'#d6a36f','낮':'#c5c9a4','저녁':'#80566a','밤':'#252c42'}[phase]
+        x,y,ww,wh=145,60,max(540,w-620),125; hour=self.background.hour; phase='아침' if 5<=hour<8 else '낮' if 8<=hour<17 else '저녁' if 17<=hour<21 else '밤'
+        sky={'아침':'#b97972','낮':'#a8ced8','저녁':'#c67869','밤':'#101a2d'}[phase]; horizon={'아침':'#d6a36f','낮':'#c5c9a4','저녁':'#80566a','밤':'#252c42'}[phase]
         self.rect(p,x-8,y-8,ww+16,wh+16,'#2b211c'); self.rect(p,x,y,ww,wh,sky); self.rect(p,x+5,y+5,ww-10,wh-10,horizon); self.text(p,x+16,y+8,250,18,'OUTSIDE VIEW · '+phase,7,'#e6d39d')
-        # 태양/달: 실제 시각에 따라 위치도 이동한다.
         if phase!='밤':
-            start,end=(5,8) if phase=='아침' else ((8,17) if phase=='낮' else (17,21)); t=max(0,min(1,(hour-start)/(end-start))); sx=x+int(t*ww); sy=y+wh-20-int(sin(pi*t)*82) if False else y+25+int((1-sin(3.14159*t))*42); self.rect(p,sx-7,sy-7,14,14,'#ffe0a0' if phase!='저녁' else '#ff9f68')
+            start,end=(5,8) if phase=='아침' else ((8,17) if phase=='낮' else (17,21)); t=max(0,min(1,(hour-start)/(end-start))); sx=x+int(t*ww); sy=y+25+int((1-sin(3.14159*t))*42); self.rect(p,sx-7,sy-7,14,14,'#ffe0a0' if phase!='저녁' else '#ff9f68')
         else:
             t=(hour-21)/8 if hour>=21 else (hour+3)/8; mx=x+int(max(0,min(1,t))*ww); my=y+30; self.rect(p,mx-7,my-7,14,14,'#e7e2c9'); self.rect(p,mx+1,my-6,6,12,sky)
             for i in range(16): self.rect(p,x+15+(i*83%max(20,ww-30)),y+15+(i*37%65),2,2,'#ddd8b5')
@@ -90,8 +85,7 @@ class PixelOffice(QWidget):
                 for yy in range(base-bh+10,base-5,16):
                     if (i+yy//16)%3: self.rect(p,bx+5,yy,4,4,light)
         for tx,sc in [(x+90,1),(x+ww//2,2),(x+ww-90,1)]: self.tree(p,tx,base+2,sc,phase)
-        self.rect(p,x,base-4,ww,4,{'아침':'#61704e','낮':'#6e8b62','저녁':'#4b4d3b','밤':'#263a2b'}[phase])
-        p.setPen(QColor('#4b4034')); p.setBrush(Qt.NoBrush); p.drawRect(x,y,ww,wh)
+        self.rect(p,x,base-4,ww,4,{'아침':'#61704e','낮':'#6e8b62','저녁':'#4b4d3b','밤':'#263a2b'}[phase]); p.setPen(QColor('#4b4034')); p.setBrush(Qt.NoBrush); p.drawRect(x,y,ww,wh)
         for xx in [x+ww//3,x+2*ww//3]: p.drawRect(xx,y,5,wh)
     def draw_furniture(self,p,w,h):
         x=w//2-150; y=h-175; self.rect(p,x-8,y-8,316,96,'#34271f'); self.rect(p,x,y,300,80,'#7a5337'); self.rect(p,x+8,y+8,284,64,'#63442f'); self.text(p,x+20,y+8,260,18,'AI TRADING TEAM · MEETING TABLE',8,'#e0c98e',Qt.AlignCenter); self.text(p,x+25,y+34,250,22,'DISCUSS · DISAGREE · VERIFY',7,'#a99d8c',Qt.AlignCenter)
@@ -120,11 +114,8 @@ class MainWindow(QMainWindow):
     def start_analysis(self):
         q=self.input.text().strip()
         if not q or self.thread is not None:return
-        # Overtime question: summon the whole team even when the office is closed.
-        # They arrive from the exit rather than magically appearing at their desks.
-        hour=self.office.background.hour
-        overtime=not (9.0 <= hour < 18.0)
-        self.office.characters.summon_for_question(overtime=not overtime)
+        # A question is an emergency call: even after hours, the team walks in from the door.
+        self.office.characters.summon_for_question(overtime=False)
         self.office.update()
         self.button.setEnabled(False); self.progress.show(); self.dialogue.setHtml('<div style="color:#bca87e;padding:20px;">⚔ AI TRADING TEAM 회의 시작...<br><br>퇴근 시간에도 긴급 호출을 받으면 출입문으로 출근합니다.</div>'); self.status.setText('⚔️ AI TRADING TEAM 회의 진행 중...')
         self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(self.on_output); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(self.analysis_done); self.thread.start()
