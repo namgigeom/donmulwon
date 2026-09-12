@@ -1,5 +1,6 @@
 # DONMULWON - TOP DOWN PIXEL OFFICE
 import os, sys, io, contextlib, traceback
+from datetime import datetime
 from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt, QRect, QTimer
 from PySide6.QtGui import QPainter, QColor, QFont
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QPlainTextEdit, QProgressBar, QComboBox
@@ -44,8 +45,23 @@ class PixelOffice(QWidget):
 
     def set_weather(self, value):
         self.background.set_weather(value); self.update()
+
     def set_time(self, value):
         self.background.set_time(value); self.update()
+
+    def auto_time(self):
+        """현재 PC의 실제 시각에 맞춰 사무실의 시간대를 자동 결정한다."""
+        hour = datetime.now().hour
+        if 5 <= hour < 11:
+            period = '아침'
+        elif 11 <= hour < 17:
+            period = '낮'
+        elif 17 <= hour < 21:
+            period = '저녁'
+        else:
+            period = '밤'
+        self.set_time(period)
+        return period
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -65,7 +81,6 @@ class PixelOffice(QWidget):
                 p.end()
 
     def draw_desks(self, p, w):
-        # Smaller individual workstations. Door stays on the far-left wall.
         stations = [(65, 235), (330, 235), (595, 235), (860, 235)]
         for x, y in stations:
             p.setPen(QColor('#241b16')); p.setBrush(QColor('#34251d')); p.drawRect(x, y, 175, 70)
@@ -73,7 +88,6 @@ class PixelOffice(QWidget):
             p.setBrush(QColor('#20272c')); p.drawRect(x+49, y+9, 77, 35)
             p.setBrush(QColor('#3c4649')); p.drawRect(x+56, y+15, 63, 23)
             p.setBrush(QColor('#4a3023')); p.drawRect(x+71, y+46, 34, 18)
-        # Smaller isolated Alfredo team-lead station.
         x, y = min(1160, w-270), 225
         p.setPen(QColor('#241b16')); p.setBrush(QColor('#2e211a')); p.drawRect(x, y, 220, 98)
         p.setBrush(QColor('#795638')); p.drawRect(x+7, y+7, 206, 84)
@@ -82,46 +96,25 @@ class PixelOffice(QWidget):
         p.setBrush(QColor('#4a3023')); p.drawRect(x+89, y+62, 42, 27)
 
     def draw_conference_area(self, p, w, h):
-        # Compact meeting area: table and shared chart are intentionally smaller.
         cx = w // 2
-        table_w = min(600, max(520, w-700))
-        table_x = cx - table_w // 2
-        table_y = 360
-        table_h = 68
-
-        p.setPen(Qt.NoPen); p.setBrush(QColor('#493827'))
-        p.drawRect(table_x-20, table_y-20, table_w+40, table_h+40)
-        p.setBrush(QColor('#5b4430'))
-        p.drawRect(table_x-14, table_y-14, table_w+28, table_h+28)
-
-        p.setPen(QColor('#251b16')); p.setBrush(QColor('#241914'))
-        p.drawRect(table_x, table_y, table_w, table_h)
+        table_w = min(600, max(520, w-700)); table_x = cx - table_w // 2; table_y = 360; table_h = 68
+        p.setPen(Qt.NoPen); p.setBrush(QColor('#493827')); p.drawRect(table_x-20, table_y-20, table_w+40, table_h+40)
+        p.setBrush(QColor('#5b4430')); p.drawRect(table_x-14, table_y-14, table_w+28, table_h+28)
+        p.setPen(QColor('#251b16')); p.setBrush(QColor('#241914')); p.drawRect(table_x, table_y, table_w, table_h)
         p.setBrush(QColor('#725238')); p.drawRect(table_x+7, table_y+7, table_w-14, table_h-14)
         p.setBrush(QColor('#876445')); p.drawRect(table_x+15, table_y+15, table_w-30, table_h-30)
-
-        p.setPen(QColor('#5b402d'))
-        p.drawLine(table_x+18, table_y+table_h//2, table_x+table_w-18, table_y+table_h//2)
-        p.setPen(Qt.NoPen); p.setBrush(QColor('#30251e'))
-        p.drawRect(cx-75, table_y+22, 150, 24)
+        p.setPen(QColor('#5b402d')); p.drawLine(table_x+18, table_y+table_h//2, table_x+table_w-18, table_y+table_h//2)
+        p.setPen(Qt.NoPen); p.setBrush(QColor('#30251e')); p.drawRect(cx-75, table_y+22, 150, 24)
         p.setBrush(QColor('#c7ad7b')); p.drawRect(cx-62, table_y+26, 124, 3); p.drawRect(cx-40, table_y+35, 80, 3)
-
         p.setBrush(QColor('#292421'))
         for sx in [table_x+45, table_x+150, table_x+table_w-195, table_x+table_w-90]:
             p.drawRect(sx, table_y-10, 42, 10); p.drawRect(sx, table_y+table_h, 42, 10)
         p.drawRect(cx-21, table_y-10, 42, 10); p.drawRect(cx-21, table_y+table_h, 42, 10)
-
-        # Shared market chart, compact and correctly typed for PySide6.
-        chart_w = min(500, w-800)
-        chart_x = cx-chart_w//2
-        chart_y = 455
-        chart_h = max(82, min(105, h-chart_y-8))
-        p.setPen(QColor('#241b16')); p.setBrush(QColor('#211d1a'))
-        p.drawRect(chart_x, chart_y, chart_w, chart_h)
+        chart_w = min(500, w-800); chart_x = cx-chart_w//2; chart_y = 455; chart_h = max(82, min(105, h-chart_y-8))
+        p.setPen(QColor('#241b16')); p.setBrush(QColor('#211d1a')); p.drawRect(chart_x, chart_y, chart_w, chart_h)
         p.setBrush(QColor('#302b26')); p.drawRect(chart_x+5, chart_y+5, chart_w-10, chart_h-10)
-        p.setPen(QColor('#cdbb99')); p.setFont(QFont('Malgun Gothic', 8, QFont.Bold))
-        p.drawText(QRect(chart_x+12, chart_y+7, 170, 18), Qt.AlignLeft, 'TEAM MARKET CHART')
-        p.setPen(QColor('#6f604c'))
-        grid_top, grid_bottom = chart_y+27, chart_y+chart_h-13
+        p.setPen(QColor('#cdbb99')); p.setFont(QFont('Malgun Gothic', 8, QFont.Bold)); p.drawText(QRect(chart_x+12, chart_y+7, 170, 18), Qt.AlignLeft, 'TEAM MARKET CHART')
+        p.setPen(QColor('#6f604c')); grid_top, grid_bottom = chart_y+27, chart_y+chart_h-13
         for i in range(1,4):
             yy = grid_top + i*(grid_bottom-grid_top)//4; p.drawLine(chart_x+12, yy, chart_x+chart_w-12, yy)
         for i in range(1,6):
@@ -138,10 +131,8 @@ class PixelOffice(QWidget):
     def draw_side_monitor(self, p, w):
         x, y, ww, hh = w-225, 225, 195, 118
         p.setPen(QColor('#241b16')); p.setBrush(QColor('#292d2c')); p.drawRect(x,y,ww,hh)
-        p.setPen(QColor('#e4d6b9')); p.setFont(QFont('Malgun Gothic',8,QFont.Bold))
-        p.drawText(QRect(x+12,y+10,165,18), Qt.AlignLeft, 'MARKET MONITOR')
-        p.setPen(QColor('#8b9c82'))
-        pts=[(x+15,y+92),(x+35,y+84),(x+56,y+87),(x+78,y+67),(x+100,y+75),(x+122,y+48),(x+145,y+60),(x+174,y+33)]
+        p.setPen(QColor('#e4d6b9')); p.setFont(QFont('Malgun Gothic',8,QFont.Bold)); p.drawText(QRect(x+12,y+10,165,18), Qt.AlignLeft, 'MARKET MONITOR')
+        p.setPen(QColor('#8b9c82')); pts=[(x+15,y+92),(x+35,y+84),(x+56,y+87),(x+78,y+67),(x+100,y+75),(x+122,y+48),(x+145,y+60),(x+174,y+33)]
         for a,b in zip(pts,pts[1:]): p.drawLine(a[0],a[1],b[0],b[1])
         p.setPen(QColor('#bda977')); p.drawText(QRect(x+12,y+98,170,16), Qt.AlignLeft, 'VOO +0.8% | JOBY +2.4%')
 
@@ -153,13 +144,16 @@ class MainWindow(QMainWindow):
         top=QHBoxLayout(); title=QLabel('🏦 DONMULWON  ·  AI TRADING TEAM'); title.setStyleSheet('font-size:22px;font-weight:700;'); top.addWidget(title); top.addStretch(); self.clock=QLabel(); top.addWidget(self.clock); layout.addLayout(top)
         self.office=PixelOffice(); layout.addWidget(self.office,1)
         controls=QHBoxLayout(); self.input=QLineEdit(); self.input.setPlaceholderText('무엇을 분석할까요? (예: JOBY 지금 사도 괜찮아?)'); self.button=QPushButton('분석 시작'); self.button.clicked.connect(self.start_analysis); self.input.returnPressed.connect(self.start_analysis)
-        self.time=QComboBox(); self.time.addItems(['아침','낮','저녁','밤']); self.time.setCurrentText('밤'); self.time.currentTextChanged.connect(self.office.set_time)
         self.weather=QComboBox(); self.weather.addItems(['맑음','비','눈']); self.weather.currentTextChanged.connect(self.office.set_weather)
-        controls.addWidget(self.input,1); controls.addWidget(self.time); controls.addWidget(self.weather); controls.addWidget(self.button); layout.addLayout(controls)
+        controls.addWidget(self.input,1); controls.addWidget(self.weather); controls.addWidget(self.button); layout.addLayout(controls)
         self.status=QLabel('대기 중 · TOP-DOWN PIXEL OFFICE'); layout.addWidget(self.status); self.progress=QProgressBar(); self.progress.setRange(0,0); self.progress.hide(); layout.addWidget(self.progress); self.output=QPlainTextEdit(); self.output.setReadOnly(True); self.output.setMaximumHeight(220); layout.addWidget(self.output); self.setCentralWidget(root)
         self.ui_timer=QTimer(self); self.ui_timer.timeout.connect(self.update_clock); self.ui_timer.start(1000); self.update_clock(); self.thread=None; self.worker=None
+
     def update_clock(self):
-        from datetime import datetime; self.clock.setText(datetime.now().strftime('%Y-%m-%d  %H:%M:%S'))
+        now = datetime.now()
+        period = self.office.auto_time()
+        self.clock.setText(now.strftime('%Y-%m-%d  %H:%M:%S') + f'  ·  {period}')
+
     def start_analysis(self):
         q=self.input.text().strip()
         if not q or self.thread is not None:return
