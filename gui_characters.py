@@ -22,24 +22,39 @@ class CharacterLayer:
  POSITIONS={'현무':(125,365,0),'김선달':(395,365,0),'이묵':(665,365,0),'너부리':(935,365,0),'알프레도':(1225,365,0)}
  IN_ORDER=['알프레도','김선달','이묵','너부리','현무']; OUT_ORDER=['김선달','이묵','너부리','현무','알프레도']; DOOR=(58.0,285.0)
  def __init__(self):
-  self.characters={n:PixelCharacter(n) for n in self.POSITIONS}; self.pos={n:(float(v[0]),float(v[1])) for n,v in self.POSITIONS.items()}; self.active={n:True for n in self.POSITIONS}; self.mode='idle'; self.queue=[]; self.sequence=[]; self.index=0; self.ticks=0
+  self.characters={n:PixelCharacter(n) for n in self.POSITIONS}; self.pos={n:(float(v[0]),float(v[1])) for n,v in self.POSITIONS.items()}; self.active={n:True for n in self.POSITIONS}; self.mode='idle'; self.queue=[]; self.sequence=[]; self.index=0; self.ticks=0; self.move_speed=5
  def tick(self):
   for c in self.characters.values(): c.tick()
   for n in list(self.queue):
    tx,ty=self.DOOR if self.mode=='leaving' else self.POSITIONS[n][:2]; x,y=self.pos[n]; dx,dy=tx-x,ty-y; d=(dx*dx+dy*dy)**0.5
-   if d<=5: self.pos[n]=(float(tx),float(ty)); self.queue.remove(n); self.active[n]=self.mode!='leaving'
-   else: self.pos[n]=(x+dx/d*5,y+dy/d*5)
+   speed=self.move_speed
+   if self.mode=='summoned': speed=12
+   if d<=speed: self.pos[n]=(float(tx),float(ty)); self.queue.remove(n); self.active[n]=self.mode!='leaving'
+   else: self.pos[n]=(x+dx/d*speed,y+dy/d*speed)
   self.ticks+=1
   if self.mode in ('arriving','leaving') and self.index<len(self.sequence) and (self.ticks==1 or self.ticks>=60):
    self.ticks=0; n=self.sequence[self.index]; self.index+=1; self.active[n]=True; self.pos[n]=self.DOOR if self.mode=='arriving' else tuple(map(float,self.POSITIONS[n][:2])); self.queue.append(n)
  def start_arrival(self):
-  self.mode='arriving'; self.sequence=self.IN_ORDER; self.index=0; self.ticks=0; self.queue=[]
+  self.mode='arriving'; self.move_speed=5; self.sequence=self.IN_ORDER; self.index=0; self.ticks=0; self.queue=[]
   for n in self.POSITIONS: self.active[n]=False; self.pos[n]=self.DOOR
  def start_departure(self):
-  self.mode='leaving'; self.sequence=self.OUT_ORDER; self.index=0; self.ticks=0; self.queue=[]
+  self.mode='leaving'; self.move_speed=5; self.sequence=self.OUT_ORDER; self.index=0; self.ticks=0; self.queue=[]
  def reset_office(self):
-  self.mode='idle'; self.queue=[]; self.sequence=[]; self.index=0; self.ticks=0
+  self.mode='idle'; self.move_speed=5; self.queue=[]; self.sequence=[]; self.index=0; self.ticks=0
   for n,(x,y,_) in self.POSITIONS.items(): self.pos[n]=(float(x),float(y)); self.active[n]=True
+ def summon_for_question(self, overtime=False):
+  # After-hours questions summon everyone back through the door at a frantic pace.
+  # Near closing time, cancel departure and keep everyone working as overtime.
+  self.queue=[]; self.sequence=[]; self.index=0; self.ticks=0
+  if overtime:
+   self.mode='overtime'; self.move_speed=5
+   for n,(x,y,_) in self.POSITIONS.items(): self.active[n]=True; self.pos[n]=(float(x),float(y))
+   return
+  self.mode='summoned'; self.move_speed=12
+  for n in self.POSITIONS:
+   if not self.active[n]:
+    self.active[n]=True; self.pos[n]=self.DOOR
+   self.queue.append(n)
  def paint(self,p):
   for n in self.POSITIONS:
    if self.active[n]: self.characters[n].paint(p,self.pos[n][0],self.pos[n][1],4)
