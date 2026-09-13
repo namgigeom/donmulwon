@@ -1,20 +1,17 @@
 """Shared in-process market/data cache for one Donmulwon analysis session.
 
-The four specialist agents run concurrently. Without a shared cache, identical
-market-data requests can hit Yahoo/API endpoints several times in the same
-question. This module deduplicates those requests and gives every specialist
-access to the same snapshot for the duration of a short TTL.
+Concurrent specialists should share identical requests, but different cache keys
+must never block each other while a network request is running.
 """
-
 import copy
 import threading
 import time
 from typing import Any, Callable
 
-
 _DEFAULT_TTL = 45.0
 _CACHE: dict[tuple[str, str], tuple[float, Any]] = {}
 _LOCK = threading.RLock()
+_INFLIGHT: dict[tuple[str, str], threading.Event] = {}
 _STATS = {"hits": 0, "misses": 0}
 
 
@@ -22,36 +19,40 @@ def _key(namespace: str, value: Any) -> tuple[str, str]:
     return namespace, repr(value)
 
 
-def get_or_fetch(
-    namespace: str,
-    value: Any,
-    fetcher: Callable[[], Any],
-    ttl: float = _DEFAULT_TTL,
-) -> Any:
-    """Return cached data or fetch it once.
-
-    The lock intentionally covers the fetch on a cache miss. The analysis is
-    short-lived and correctness/API deduplication is more important here than
-    allowing duplicate concurrent requests.
-    """
+def get_or_fetch(namespace: str, value: Any, fetcher: Callable[[], Any], ttl: float = _DEFAULT_TTL) -> Any:
+    """Return cached data; deduplicate the same key without a global network lock."""
     key = _key(namespace, value)
-    now = time.monotonic()
-
-    with _LOCK:
-        cached = _CACHE.get(key)
-        if cached and now - cached[0] < ttl:
-            _STATS["hits"] += 1
-            return copy.deepcopy(cached[1])
-
-        _STATS["misses"] += 1
-        result = fetcher()
-        _CACHE[key] = (time.monotonic(), copy.deepcopy(result))
-        return copy.deepcopy(result)
+    while True:
+        with _LOCK:
+            cached = _CACHE.get(key)
+            if cached and time.monotonic() - cached[0] < ttl:
+                _STATS["hits"] += 1
+                return copy.deepcopy(cached[1])
+            event = _INFLIGHT.get(key)
+            if event is None:
+                event = threading.Event()
+                _INFLIGHT[key] = event
+                _STATS["misses"] += 1
+                owner = True
+            else:
+                owner = False
+        if owner:
+            try:
+                result = fetcher()
+                with _LOCK:
+                    _CACHE[key] = (time.monotonic(), copy.deepcopy(result))
+                return copy.deepcopy(result)
+            finally:
+                with _LOCK:
+                    _INFLIGHT.pop(key, None)
+                    event.set()
+        event.wait()
 
 
 def clear() -> None:
     with _LOCK:
         _CACHE.clear()
+        _INFLIGHT.clear()
         _STATS["hits"] = 0
         _STATS["misses"] = 0
 
