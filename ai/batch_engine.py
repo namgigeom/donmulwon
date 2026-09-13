@@ -13,6 +13,10 @@ ROLE_CONFIG = {
     "turtle": {"name": "🐢 현무", "prompt_ticker": "ticker"},
 }
 
+# yfinance/network 작업은 I/O bound라 소수의 worker로 병렬화한다.
+DATA_MAX_WORKERS = 6
+ROLE_MAX_WORKERS = 4
+
 
 def _json(data):
     return json.dumps(data, ensure_ascii=False, indent=2, default=str)
@@ -20,7 +24,7 @@ def _json(data):
 
 @lru_cache(maxsize=32)
 def _extract_prompt(function):
-    """Extract a role prompt once per function instead of parsing source every call."""
+    """Prompt source parsing is expensive; cache it for the process lifetime."""
     source = inspect.getsource(function)
     match = re.search(r"prompt\s*=\s*f([\"']{3})(.*?)(?:\1)", source, re.S)
     if not match:
@@ -30,7 +34,11 @@ def _extract_prompt(function):
 
 def _render_prompt(template, ticker_label, data_text):
     prompt = template
-    for key, value in (("{data_text}", data_text), ("{ticker}", ticker_label), ("{target_ticker}", ticker_label)):
+    for key, value in (
+        ("{data_text}", data_text),
+        ("{ticker}", ticker_label),
+        ("{target_ticker}", ticker_label),
+    ):
         prompt = prompt.replace(key, value)
     return prompt
 
@@ -39,21 +47,55 @@ def _cached_call(namespace, value, function, *args):
     return get_or_fetch(namespace, value, lambda: function(*args))
 
 
-def _parallel_map(tickers, worker, max_workers=6):
-    """Run independent ticker data requests concurrently and preserve ticker order."""
+def _parallel_map(tickers, worker, max_workers=DATA_MAX_WORKERS):
+    """Run independent ticker operations concurrently while preserving order."""
+    tickers = list(dict.fromkeys(tickers or []))
     if len(tickers) <= 1:
         return {t: worker(t) for t in tickers}
+
     workers = min(max_workers, len(tickers))
+    results = {}
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(worker, t): t for t in tickers}
-        results = {}
+        futures = {executor.submit(worker, ticker): ticker for ticker in tickers}
         for future in as_completed(futures):
             ticker = futures[future]
             results[ticker] = future.result()
-    return {t: results[t] for t in tickers}
+    return {ticker: results[ticker] for ticker in tickers}
+
+
+def _collect_crow_ticker(module, ticker):
+    """Collect Crow's three independent yfinance datasets concurrently.
+
+    This intentionally bypasses collect_data() when its implementation is
+    sequential, while keeping the original collector functions and output shape.
+    """
+    company_fn = getattr(module, "get_company_data", None)
+    news_fn = getattr(module, "get_news", None)
+    financial_fn = getattr(module, "get_financials", None)
+    if not all(callable(fn) for fn in (company_fn, news_fn, financial_fn)):
+        collector = getattr(module, "collect_data", None)
+        if not callable(collector):
+            raise RuntimeError("김선달 데이터 수집 함수를 찾지 못했습니다.")
+        return collector(ticker)
+
+    jobs = {
+        "company": ("crow.company", company_fn),
+        "news": ("crow.news", news_fn),
+        "financials": ("crow.financials", financial_fn),
+    }
+    result = {}
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            executor.submit(_cached_call, namespace, ticker, fn, ticker): key
+            for key, (namespace, fn) in jobs.items()
+        }
+        for future in as_completed(futures):
+            result[futures[future]] = future.result()
+    return result
 
 
 def _collect_role_data(module, role, tickers, account_data):
+    tickers = list(dict.fromkeys(tickers or []))
     memory = {}
     try:
         loader = getattr(module, "load_memory", None)
@@ -63,23 +105,30 @@ def _collect_role_data(module, role, tickers, account_data):
         pass
 
     if role == "crow":
-        collector = getattr(module, "collect_data", None)
-        if not callable(collector):
-            raise RuntimeError("김선달 collect_data를 찾지 못했습니다.")
-        # collect_data 자체는 내부에서 company/news/financials를 병렬 처리한다.
-        # 여러 티커도 동시에 실행해 전체 대기시간을 줄인다.
-        stocks = _parallel_map(
-            tickers,
-            lambda t: _cached_call("crow.collect_data", t, collector, t),
-        )
-        return {"role": role, "requested_tickers": tickers, "stocks": stocks, "memory": memory, "portfolio_context": account_data}
+        stocks = _parallel_map(tickers, lambda t: _collect_crow_ticker(module, t))
+        return {
+            "role": role,
+            "requested_tickers": tickers,
+            "stocks": stocks,
+            "memory": memory,
+            "portfolio_context": account_data,
+        }
 
     if role == "snake":
         collector = getattr(module, "get_market_data", None)
         if not callable(collector):
             raise RuntimeError("이묵 get_market_data를 찾지 못했습니다.")
-        stocks = _parallel_map(tickers, lambda t: _cached_call("snake.get_market_data", t, collector, t))
-        return {"role": role, "requested_tickers": tickers, "stocks": stocks, "memory": memory, "portfolio_context": account_data}
+        stocks = _parallel_map(
+            tickers,
+            lambda t: _cached_call("snake.get_market_data", t, collector, t),
+        )
+        return {
+            "role": role,
+            "requested_tickers": tickers,
+            "stocks": stocks,
+            "memory": memory,
+            "portfolio_context": account_data,
+        }
 
     if role == "raccoon":
         analyze_portfolio = getattr(module, "analyze_portfolio", None)
@@ -89,20 +138,49 @@ def _collect_role_data(module, role, tickers, account_data):
         if not all(callable(x) for x in (analyze_portfolio, find_holding, get_market_context, get_stock_data)):
             raise RuntimeError("너부리의 계좌/시장 데이터 함수를 찾지 못했습니다.")
 
-        # 계좌 전체/현재 시장 데이터는 한 번만 가져오고, 종목별 데이터는 병렬화한다.
+        # 계좌/시장 공통 데이터는 동시에 한 번만 가져온다.
         with ThreadPoolExecutor(max_workers=2) as executor:
-            portfolio_future = executor.submit(_cached_call, "raccoon.analyze_portfolio", repr(account_data), analyze_portfolio, account_data)
-            market_future = executor.submit(_cached_call, "raccoon.get_market_context", "current", get_market_context)
+            portfolio_future = executor.submit(
+                _cached_call,
+                "raccoon.analyze_portfolio",
+                _json(account_data),
+                analyze_portfolio,
+                account_data,
+            )
+            market_future = executor.submit(
+                _cached_call,
+                "raccoon.get_market_context",
+                "current",
+                get_market_context,
+            )
             portfolio = portfolio_future.result()
             market = market_future.result()
 
-        def raccoon_stock(t):
-            holding = _cached_call("raccoon.find_holding", (id(account_data), t), find_holding, account_data, t)
-            stock_data = _cached_call("raccoon.get_stock_data", t, get_stock_data, t)
+        def raccoon_stock(ticker):
+            holding = _cached_call(
+                "raccoon.find_holding",
+                (_json(account_data), ticker),
+                find_holding,
+                account_data,
+                ticker,
+            )
+            stock_data = _cached_call(
+                "raccoon.get_stock_data",
+                ticker,
+                get_stock_data,
+                ticker,
+            )
             return {"holding": holding, "stock_data": stock_data}
 
         stocks = _parallel_map(tickers, raccoon_stock)
-        return {"role": role, "requested_tickers": tickers, "stocks": stocks, "market_data": market, "portfolio_context": portfolio, "memory": memory}
+        return {
+            "role": role,
+            "requested_tickers": tickers,
+            "stocks": stocks,
+            "market_data": market,
+            "portfolio_context": portfolio,
+            "memory": memory,
+        }
 
     if role == "turtle":
         get_market_data = getattr(module, "get_market_data", None)
@@ -113,20 +191,38 @@ def _collect_role_data(module, role, tickers, account_data):
 
         # 서로 독립적인 시장 요청은 동시에 수행한다.
         with ThreadPoolExecutor(max_workers=2) as executor:
-            market_future = executor.submit(_cached_call, "turtle.get_market_data", "current", get_market_data)
-            trends_future = executor.submit(_cached_call, "turtle.get_market_trends", "current", get_market_trends)
+            market_future = executor.submit(
+                _cached_call, "turtle.get_market_data", "current", get_market_data
+            )
+            trends_future = executor.submit(
+                _cached_call, "turtle.get_market_trends", "current", get_market_trends
+            )
             market = market_future.result()
             trends = trends_future.result()
-        stocks = _parallel_map(tickers, lambda t: _cached_call("turtle.get_stock_context", t, get_stock_context, t))
-        return {"role": role, "requested_tickers": tickers, "market_data": market, "market_trends": trends, "stocks": stocks, "memory": memory}
+
+        stocks = _parallel_map(
+            tickers,
+            lambda t: _cached_call(
+                "turtle.get_stock_context", t, get_stock_context, t
+            ),
+        )
+        return {
+            "role": role,
+            "requested_tickers": tickers,
+            "market_data": market,
+            "market_trends": trends,
+            "stocks": stocks,
+            "memory": memory,
+        }
 
     raise ValueError(f"지원하지 않는 role: {role}")
 
 
 def run_role_batch(module, role, tickers, account_data):
-    """Run exactly one LLM request for one specialist and all requested tickers."""
+    """Run one LLM request for one specialist after parallel data collection."""
     if module is None:
         return None
+
     function_name = "analyze_macro" if role == "turtle" else "analyze_stock"
     function = getattr(module, function_name, None)
     if not callable(function):
@@ -154,29 +250,40 @@ def run_role_batch(module, role, tickers, account_data):
     router = getattr(module, "ai_router", None)
     if router is None or not hasattr(router, "generate_content"):
         raise RuntimeError(f"{role}의 ai_router를 찾지 못했습니다.")
+
     response = router.generate_content(model="gemini-3.6-flash", contents=prompt)
     return getattr(response, "text", str(response))
 
 
-def run_team_batches(modules, tickers, account_data, max_workers=4):
+def run_team_batches(modules, tickers, account_data, max_workers=ROLE_MAX_WORKERS):
+    """Run the four specialist analyses concurrently."""
+    tickers = list(dict.fromkeys(tickers or []))
     results = {}
     jobs = {}
-    roles = [("crow", "🐦 김선달"), ("snake", "🐍 이묵"), ("raccoon", "🦝 너부리"), ("turtle", "🐢 현무")]
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    roles = [
+        ("crow", "🐦 김선달"),
+        ("snake", "🐍 이묵"),
+        ("raccoon", "🦝 너부리"),
+        ("turtle", "🐢 현무"),
+    ]
+
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(roles))) as executor:
         for role, name in roles:
             module = modules.get(role)
             if module is None:
                 results[role] = None
                 continue
             jobs[executor.submit(run_role_batch, module, role, tickers, account_data)] = (role, name)
+
         for future in as_completed(jobs):
             role, name = jobs[future]
             try:
                 results[role] = future.result()
                 print(f"✅ {name} 통합 분석 완료")
-            except Exception as e:
-                print(f"❌ {name} 분석 실패: {type(e).__name__}: {e}")
+            except Exception as exc:
+                print(f"❌ {name} 분석 실패: {type(exc).__name__}: {exc}")
                 results[role] = None
-    s = cache_stats()
-    print(f"📦 데이터 캐시: hit {s['hits']} / miss {s['misses']}")
+
+    cache = cache_stats()
+    print(f"📦 데이터 캐시: hit {cache['hits']} / miss {cache['misses']}")
     return results
