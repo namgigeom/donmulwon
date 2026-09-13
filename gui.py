@@ -4,42 +4,34 @@ from math import sin
 from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt, QRect, QTimer
 from PySide6.QtGui import QPainter, QColor, QFont
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextBrowser, QProgressBar, QComboBox
-
 BASE_DIR=os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path: sys.path.insert(0,BASE_DIR)
 from gui_background import PixelBackground
 from gui_characters_v2 import CharacterLayer
-
 class AnalysisWorker(QObject):
     output=Signal(str); failed=Signal(str); finished=Signal()
     def __init__(self,question): super().__init__(); self.question=question
     @Slot()
     def run(self):
         try:
-            import main
-            buf=io.StringIO()
+            import main; buf=io.StringIO()
             with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf): result=main.run_analysis(self.question)
-            log=buf.getvalue().strip()
-            answer=str(result.get('alfredo','') or result.get('final','') or '').strip() if isinstance(result,dict) else str(result or '').strip()
+            log=buf.getvalue().strip(); answer=str(result.get('alfredo','') or result.get('final','') or '').strip() if isinstance(result,dict) else str(result or '').strip()
             if not answer: answer='알프레도의 최종 판단이 생성되지 않았습니다.'
             self.output.emit(answer+'\n\n[MEETING_LOG]\n'+log[-16000:])
         except Exception: self.failed.emit(traceback.format_exc())
         finally: self.finished.emit()
-
 class ResultPanel(QTextBrowser):
     def __init__(self):
         super().__init__(); self.setReadOnly(True); self.setMinimumHeight(190); self.setStyleSheet('QTextBrowser{background:#141719;border:1px solid #65543e;padding:10px;color:#eee4d2;}')
     def show_result(self,text):
-        raw=text.split('[MEETING_LOG]')[0].strip() or '최종 분석 결과가 없습니다.'
-        safe=html.escape(raw).replace('\n','<br>')
+        raw=text.split('[MEETING_LOG]')[0].strip() or '최종 분석 결과가 없습니다.'; safe=html.escape(raw).replace('\n','<br>')
         self.setHtml('<div style="font-family:Malgun Gothic;color:#eee4d2;font-size:10pt"><div style="color:#c8a866;font-size:12pt;font-weight:700;margin-bottom:8px">🐱 알프레도 · ANALYSIS RESULT</div><div style="background:#29231b;border:1px solid #9b7c4c;padding:12px;border-radius:7px">'+safe+'</div></div>')
     def show_waiting(self): self.setHtml('<div style="color:#8f877b;padding:18px">회의가 끝나면 알프레도의 최종 검증 결과가 이곳에 정리됩니다.</div>')
-
 class MeetingLogPanel(QTextBrowser):
     def __init__(self):
         super().__init__(); self.setReadOnly(True); self.setMaximumHeight(155); self.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:8px;color:#bfb6a6;}')
     def set_status(self,title,detail): self.setHtml(f'<div style="font-family:Malgun Gothic;color:#eee4d2"><b>{html.escape(title)}</b><br><span style="color:#a49a8b">{html.escape(detail)}</span></div>')
-
 class PixelOffice(QWidget):
     DESKS=[('현무',55,244,175),('김선달',320,244,175),('이묵',585,244,175),('너부리',850,244,175),('알프레도',1115,244,175)]
     ROLE={'김선달':'FUNDAMENTALS + NEWS','이묵':'TECHNICAL','너부리':'PORTFOLIO','현무':'MACRO','알프레도':'FINAL VERIFIER'}
@@ -95,34 +87,33 @@ class PixelOffice(QWidget):
             p.setPen(Qt.NoPen); self.rect(p,x+12,y+13,24,3,'#a0744d'); self.rect(p,x+dw-42,y+13,28,3,'#5e3f2c'); self.rect(p,x+dw//2-34,y+47,68,6,'#303033'); self.rect(p,x+dw-29,y+43,12,9,'#4e6652'); self.rect(p,x+8,y+43,62,10,'#3a2b23'); self.text(p,x+10,y+47,60,12,name,6,'#e1cb91',Qt.AlignCenter); self.text(p,x,y+78,dw,18,self.ROLE[name],5,'#9f927d',Qt.AlignCenter)
     def draw_market(self,p,w):
         x=150;y=205;ww=min(610,w-670);self.rect(p,x-4,y-4,ww+8,44,'#30241e');self.rect(p,x,y,ww,36,'#171d20');self.text(p,x+12,y+5,190,15,'MARKET BOARD',7,'#d8c48e');self.text(p,x+205,y+5,ww-220,15,self.active_ticker,7,'#9ab0a8',Qt.AlignRight);self.text(p,x+12,y+20,ww-24,13,'VOO +5.74%   JEPQ +0.00%   TTWO -2.36%   JOBY -9.23%   ALAB -6.82%',5,'#cdb985')
-    def draw_account(self,p,w):
-        x=w-205;y=55;ww=175;hh=140;self.rect(p,x,y,ww,hh,'#252a2c');self.rect(p,x+5,y+5,ww-10,hh-10,'#172024');self.text(p,x+12,y+10,150,18,'ACCOUNT',8,'#d8c48e');self.text(p,x+12,y+28,150,14,'LIVE HOLDINGS',5,'#8fa69a');yy=y+48
+    def draw_account(self,p):
+        w=self.width(); x=w-205;y=55;ww=175;hh=140;self.rect(p,x,y,ww,hh,'#252a2c');self.rect(p,x+5,y+5,ww-10,hh-10,'#172024');self.text(p,x+12,y+10,150,18,'ACCOUNT',8,'#d8c48e');self.text(p,x+12,y+28,150,14,'LIVE HOLDINGS',5,'#8fa69a');yy=y+48
         for t,wt,val in self.PORTFOLIO:self.text(p,x+10,yy,45,14,t,5,'#eee4d2');self.text(p,x+57,yy,42,14,wt,5,'#cdb985',Qt.AlignRight);self.text(p,x+101,yy,62,14,val,5,'#aebbb2',Qt.AlignRight);yy+=18
     def set_ticker(self,t): self.active_ticker=t or 'MARKET'; self.update()
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__(); self.setWindowTitle('돈물원 · DONMULWON'); self.resize(1500,980); self.setMinimumSize(1180,820); self.setStyleSheet('QMainWindow{background:#101315;color:#ded7c5;} QLabel{color:#ded7c5;} QLineEdit,QTextBrowser,QComboBox{background:#1d2225;color:#eee4d2;border:1px solid #51483b;padding:7px;} QPushButton{background:#665039;color:#fff2d4;padding:8px 16px;border:1px solid #8a6c4c;} QProgressBar{border:1px solid #51483b;background:#202428;} QProgressBar::chunk{background:#806544;}')
         root=QWidget(); layout=QVBoxLayout(root); layout.setContentsMargins(14,10,14,10); layout.setSpacing(8); top=QHBoxLayout(); title=QLabel('🏦 DONMULWON · PIXEL TRADING OFFICE'); title.setStyleSheet('font-size:21px;font-weight:700;'); top.addWidget(title); top.addStretch(); self.clock=QLabel(); top.addWidget(self.clock); layout.addLayout(top); self.office=PixelOffice(); layout.addWidget(self.office,1)
         controls=QHBoxLayout(); self.input=QLineEdit(); self.input.setPlaceholderText('예: JOBY 지금 사도 괜찮아? / 내 계좌 전체적으로 봐줘'); self.button=QPushButton('분석 시작'); self.button.clicked.connect(self.start_analysis); self.input.returnPressed.connect(self.start_analysis); self.weather=QComboBox(); self.weather.addItems(['맑음','비','눈']); self.weather.currentTextChanged.connect(self.office.set_weather); controls.addWidget(self.input,1); controls.addWidget(self.weather); controls.addWidget(self.button); layout.addLayout(controls)
-        self.status=QLabel('대기 중 · 실제 시각 기준 사무실 상태'); layout.addWidget(self.status); self.progress=QProgressBar(); self.progress.setRange(0,0); self.progress.hide(); layout.addWidget(self.progress); self.meeting=MeetingLogPanel(); layout.addWidget(self.meeting); self.result=ResultPanel(); self.result.show_waiting(); layout.addWidget(self.result); self.setCentralWidget(root); self.thread=None; self.worker=None; self.started_at=0
+        self.status=QLabel('대기 중 · 실제 시각 기준 사무실 상태'); layout.addWidget(self.status); self.progress=QProgressBar(); self.progress.setRange(0,0); self.progress.hide(); layout.addWidget(self.progress); self.meeting=MeetingLogPanel(); layout.addWidget(self.meeting); self.result=ResultPanel(); self.result.show_waiting(); layout.addWidget(self.result); self.setCentralWidget(root); self.thread=None; self.worker=None; self.started_at=0; self.pending_result=None
         self.timer=QTimer(self); self.timer.timeout.connect(self.update_clock); self.timer.timeout.connect(self.animate); self.timer.start(500); self.update_clock()
     def animate(self): self.office.characters.tick(); self.office.update()
     def update_clock(self):
         now=datetime.now(); period=self.office.auto_time(); self.clock.setText(now.strftime('%Y-%m-%d  %H:%M:%S')+' · '+period); self.office.update()
-        if self.thread is not None: self.status.setText(f'⚔️ AI TRADING TEAM 회의 진행 중 · {int(time.monotonic()-self.started_at)}초 경과')
+        if self.thread is not None:self.status.setText(f'⚔️ AI TRADING TEAM 회의 진행 중 · {int(time.monotonic()-self.started_at)}초 경과')
     def start_analysis(self):
         q=self.input.text().strip()
         if not q or self.thread is not None:return
-        self.started_at=time.monotonic(); self.office.characters.summon_for_question(overtime=True); self.office.update(); self.button.setEnabled(False); self.progress.show(); self.meeting.set_status('⚔ AI TRADING TEAM 회의 시작','긴급 호출 · 전원이 출입문으로 출근 중...'); self.result.show_waiting(); self.status.setText('⚔️ AI TRADING TEAM 회의 준비 중...')
+        self.started_at=time.monotonic(); self.pending_result=None; self.office.characters.summon_for_question(overtime=True); self.office.update(); self.button.setEnabled(False); self.progress.show(); self.meeting.set_status('⚔ AI TRADING TEAM 회의 시작','긴급 호출 · 전원이 출입문으로 출근 중...'); self.result.show_waiting(); self.status.setText('⚔️ AI TRADING TEAM 회의 준비 중...')
         self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(self.on_output); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(self.analysis_done); self.thread.start()
     def on_output(self,text):
-        self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료!','회의완료 · 최종 검증 결과를 정리했습니다.')
-        if hasattr(self.office.characters,'show_final_verdict'): self.office.characters.show_final_verdict()
+        self.pending_result=text; log=text.split('[MEETING_LOG]')[-1].strip(); self.office.characters.set_meeting_log(log); self.meeting.set_status('🗣️ 회의 발언 정리','4명의 의견을 확인했습니다. 이제 알프레도가 최종 검증합니다.'); QTimer.singleShot(2200,self.finalize_result)
+    def finalize_result(self):
+        if not self.pending_result:return
+        self.office.characters.show_final_verdict(); self.result.show_result(self.pending_result); self.meeting.set_status('🐱 알프레도 · 분석완료!','회의완료 · 최종 판단을 분석 결과에 정리했습니다.'); self.office.update()
     def on_failed(self,err):
-        self.meeting.set_status('❌ 분석 실패','API 또는 main.py에서 오류가 발생했습니다.'); self.result.show_result('분석 실패\n\n'+err)
-        if hasattr(self.office.characters,'show_final_verdict'): self.office.characters.show_final_verdict(error=True)
+        self.pending_result='분석 실패\n\n'+err; self.meeting.set_status('❌ 분석 실패','API 또는 main.py에서 오류가 발생했습니다.'); self.result.show_result(self.pending_result); self.office.characters.show_final_verdict(error=True)
     def analysis_done(self): self.thread=None; self.worker=None; self.button.setEnabled(True); self.progress.hide(); self.status.setText('분석 완료 · 알프레도 최종 결과 표시 완료')
-
 if __name__=='__main__':
     app=QApplication(sys.argv); win=MainWindow(); win.show(); sys.exit(app.exec())
