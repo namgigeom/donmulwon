@@ -1,64 +1,94 @@
-import os, time, re
+import time, re
 from PySide6.QtCore import Qt, QRect, QPoint
-from PySide6.QtGui import QColor, QFont, QPolygon, QImage
+from PySide6.QtGui import QColor, QFont, QPolygon
 
-BASE_DIR=os.path.dirname(os.path.abspath(__file__))
-ASSET_DIR=os.path.join(BASE_DIR,'assets','office_animals')
-os.makedirs(ASSET_DIR,exist_ok=True)
-
-# Character art is deliberately drawn as complete pixel silhouettes instead of
-# cropping arbitrary sprite-sheet tiles. This prevents heads/bodies being cut.
 class PixelCharacter:
+    # Detailed vector silhouettes rendered with crisp edges. No sprite-sheet cropping.
+    COLORS={
+        '현무':('#17251d','#294b35','#4d7650','#829966','#b5bd82'),
+        '김선달':('#11161a','#242c32','#3b474e','#69757a','#b2aa91'),
+        '이묵':('#202d1e','#385832','#56783f','#83a255','#b6bd78'),
+        '너부리':('#303130','#555552','#74736e','#a29e95','#d1c7b6'),
+        '알프레도':('#504a47','#8b807a','#afa39b','#d3c7b9','#eee3d0')}
     def __init__(self,name): self.name=name; self.frame=0
     def tick(self): self.frame=(self.frame+1)%60
-    def r(self,p,x,y,w,h,c): p.setPen(Qt.NoPen); p.setBrush(QColor(c)); p.drawRect(int(x),int(y),int(w),int(h))
-    def paint(self,p,x,y,scale=3):
-        s=scale; x=int(x); y=int(y)
+    def rect(self,p,x,y,w,h,c): p.setPen(Qt.NoPen); p.setBrush(QColor(c)); p.drawRect(int(x),int(y),int(w),int(h))
+    def ell(self,p,x,y,w,h,c): p.setPen(Qt.NoPen); p.setBrush(QColor(c)); p.drawEllipse(int(x),int(y),int(w),int(h))
+    def poly(self,p,pts,c): p.setPen(Qt.NoPen); p.setBrush(QColor(c)); p.drawPolygon(QPolygon([QPoint(int(x),int(y)) for x,y in pts]))
+    def line(self,p,a,b,c,width=2): p.setPen(QColor(c)); p.setBrush(Qt.NoBrush); p.drawLine(QPoint(int(a[0]),int(a[1])),QPoint(int(b[0]),int(b[1]))); p.setPen(Qt.NoPen)
+    def paint(self,p,x,y,scale=2.25):
+        s=scale
         if self.name=='현무': self.turtle(p,x,y,s)
         elif self.name=='김선달': self.crow(p,x,y,s)
         elif self.name=='이묵': self.snake(p,x,y,s)
         elif self.name=='너부리': self.raccoon(p,x,y,s)
         else: self.cat(p,x,y,s)
     def turtle(self,p,x,y,s):
-        # complete turtle: shell, head, four feet and tail
-        self.r(p,x+14*s,y+7*s,34*s,20*s,'#31533c'); self.r(p,x+10*s,y+12*s,42*s,13*s,'#466d4d')
-        self.r(p,x+17*s,y+5*s,8*s,5*s,'#587f58'); self.r(p,x+28*s,y+8*s,9*s,5*s,'#284534'); self.r(p,x+18*s,y+15*s,9*s,4*s,'#284534'); self.r(p,x+31*s,y+15*s,9*s,4*s,'#284534')
-        self.r(p,x+45*s,y+10*s,11*s,12*s,'#6d8758'); self.r(p,x+53*s,y+12*s,5*s,5*s,'#8da06c'); self.r(p,x+56*s,y+11*s,2*s,2*s,'#171b18')
-        self.r(p,x+12*s,y+25*s,9*s,6*s,'#5e7d56'); self.r(p,x+39*s,y+25*s,9*s,6*s,'#5e7d56'); self.r(p,x+24*s,y+27*s,7*s,6*s,'#5e7d56'); self.r(p,x+46*s,y+27*s,7*s,6*s,'#5e7d56')
-        self.r(p,x+7*s,y+18*s,6*s,4*s,'#5e7d56'); self.r(p,x+5*s,y+20*s,4*s,3*s,'#5e7d56')
+        a,b,c,d,e=self.COLORS['현무']
+        self.poly(p,[(x+12*s,y+42*s),(x+2*s,y+36*s),(x+7*s,y+48*s)],b)
+        for xx in (15,30,45,53): self.ell(p,x+xx*s,y+36*s,13*s,10*s,c)
+        self.ell(p,x+7*s,y+8*s,55*s,39*s,e); self.ell(p,x+10*s,y+10*s,49*s,35*s,a); self.ell(p,x+14*s,y+12*s,41*s,31*s,b)
+        self.ell(p,x+20*s,y+16*s,29*s,23*s,c)
+        self.line(p,(x+34*s,y+13*s),(x+34*s,y+42*s),a,2); self.line(p,(x+15*s,y+27*s),(x+54*s,y+27*s),a,2)
+        self.line(p,(x+23*s,y+15*s),(x+20*s,y+25*s),a,2); self.line(p,(x+45*s,y+15*s),(x+49*s,y+25*s),a,2)
+        self.ell(p,x+54*s,y+15*s,20*s,19*s,c); self.ell(p,x+58*s,y+18*s,12*s,12*s,d); self.ell(p,x+65*s,y+20*s,3*s,3*s,e)
+        self.rect(p,x+68*s,y+24*s,6*s,2*s,e)
+        self.rect(p,x+17*s,y+43*s,10*s,4*s,d); self.rect(p,x+43*s,y+43*s,10*s,4*s,d)
     def crow(self,p,x,y,s):
-        # complete crow silhouette with head, beak, wings, legs and tail
-        c='#252a30'; hi='#3c454c';
-        self.r(p,x+18*s,y+5*s,18*s,14*s,c); self.r(p,x+12*s,y+11*s,31*s,25*s,c); self.r(p,x+8*s,y+22*s,39*s,15*s,c)
-        self.r(p,x+2*s,y+20*s,12*s,5*s,c); self.r(p,x+0*s,y+21*s,8*s,3*s,'#15181b')
-        self.r(p,x+27*s,y+2*s,5*s,5*s,hi); self.r(p,x+35*s,y+12*s,9*s,3*s,'#111416'); self.r(p,x+42*s,y+14*s,10*s,3*s,'#171a1d')
-        self.r(p,x+16*s,y+27*s,17*s,5*s,hi); self.r(p,x+19*s,y+36*s,3*s,13*s,'#1a1d20'); self.r(p,x+32*s,y+35*s,3*s,14*s,'#1a1d20'); self.r(p,x+17*s,y+48*s,9*s,2*s,'#17191b'); self.r(p,x+30*s,y+48*s,9*s,2*s,'#17191b')
-        self.r(p,x+8*s,y+36*s,9*s,13*s,c); self.r(p,x+39*s,y+34*s,12*s,14*s,c)
+        a,b,c,d,e=self.COLORS['김선달']
+        self.poly(p,[(x+31*s,y+38*s),(x+8*s,y+58*s),(x+39*s,y+50*s),(x+54*s,y+43*s)],a)
+        self.ell(p,x+14*s,y+17*s,45*s,39*s,e); self.ell(p,x+18*s,y+20*s,38*s,33*s,a)
+        self.poly(p,[(x+25*s,y+23*s),(x+5*s,y+36*s),(x+13*s,y+51*s),(x+39*s,y+45*s)],b)
+        for i in range(4): self.line(p,(x+(11+i*6)*s,y+(43-i*2)*s),(x+(29+i*4)*s,y+(28+i*2)*s),c,2)
+        self.ell(p,x+25*s,y+3*s,31*s,29*s,a); self.ell(p,x+29*s,y+6*s,24*s,22*s,b)
+        self.poly(p,[(x+49*s,y+12*s),(x+75*s,y+17*s),(x+49*s,y+21*s)],e)
+        self.ell(p,x+45*s,y+10*s,6*s,6*s,d); self.ell(p,x+47*s,y+12*s,2*s,2*s,e)
+        self.line(p,(x+28*s,y+51*s),(x+25*s,y+66*s),c,3); self.line(p,(x+45*s,y+50*s),(x+48*s,y+66*s),c,3)
+        for xx in (25,48): self.line(p,(x+xx*s,y+66*s),(x+(xx-8)*s,y+69*s),c,2); self.line(p,(x+xx*s,y+66*s),(x+(xx+3)*s,y+69*s),c,2)
     def snake(self,p,x,y,s):
-        c='#526f3e'; hi='#7f9950'; dark='#30462d'
-        # full coiled body plus raised head
-        self.r(p,x+8*s,y+28*s,42*s,8*s,c); self.r(p,x+15*s,y+35*s,34*s,8*s,c); self.r(p,x+8*s,y+40*s,39*s,7*s,c)
-        self.r(p,x+37*s,y+8*s,11*s,29*s,c); self.r(p,x+42*s,y+4*s,13*s,13*s,c); self.r(p,x+52*s,y+9*s,8*s,5*s,dark); self.r(p,x+55*s,y+7*s,3*s,3*s,'#d4c77a'); self.r(p,x+57*s,y+8*s,2*s,2*s,'#171a16')
-        for dx,dy in [(14,31),(26,37),(36,31),(20,42)]: self.r(p,x+dx*s,y+dy*s,5*s,3*s,hi)
-        self.r(p,x+4*s,y+46*s,22*s,3*s,dark)
+        a,b,c,d,e=self.COLORS['이묵']
+        self.ell(p,x+3*s,y+31*s,61*s,27*s,e); self.ell(p,x+7*s,y+29*s,53*s,23*s,a)
+        self.poly(p,[(x+8*s,y+42*s),(x+20*s,y+51*s),(x+46*s,y+49*s),(x+58*s,y+39*s),(x+52*s,y+51*s),(x+20*s,y+56*s)],b)
+        for xx in (14,26,38,50): self.rect(p,x+xx*s,y+38*s,5*s,3*s,d)
+        self.rect(p,x+43*s,y+10*s,13*s,31*s,a); self.rect(p,x+47*s,y+7*s,10*s,30*s,b)
+        self.ell(p,x+43*s,y+2*s,24*s,18*s,b); self.ell(p,x+47*s,y+5*s,17*s,13*s,a)
+        self.ell(p,x+52*s,y+7*s,4*s,4*s,d); self.ell(p,x+61*s,y+7*s,4*s,4*s,d); self.ell(p,x+53*s,y+8*s,2*s,2*s,e); self.ell(p,x+62*s,y+8*s,2*s,2*s,e)
+        self.line(p,(x+58*s,y+14*s),(x+70*s,y+15*s),e,2); self.line(p,(x+69*s,y+15*s),(x+74*s,y+13*s),e,1)
+        for yy in (24,29,34):
+            for xx in (46,54): self.rect(p,x+xx*s,y+yy*s,4*s,2*s,c)
     def raccoon(self,p,x,y,s):
-        c='#6b6a68'; dark='#35383a'; light='#aaa69b'
-        self.r(p,x+12*s,y+9*s,34*s,27*s,c); self.r(p,x+17*s,y+4*s,9*s,8*s,c); self.r(p,x+35*s,y+4*s,9*s,8*s,c); self.r(p,x+5*s,y+17*s,13*s,18*s,c); self.r(p,x+43*s,y+17*s,13*s,18*s,c)
-        self.r(p,x+14*s,y+14*s,31*s,13*s,dark); self.r(p,x+19*s,y+16*s,7*s,6*s,light); self.r(p,x+34*s,y+16*s,7*s,6*s,light); self.r(p,x+22*s,y+18*s,4*s,4*s,'#171819'); self.r(p,x+35*s,y+18*s,4*s,4*s,'#171819'); self.r(p,x+28*s,y+24*s,7*s,4*s,'#222324')
-        self.r(p,x+12*s,y+31*s,34*s,14*s,c); self.r(p,x+17*s,y+42*s,7*s,8*s,dark); self.r(p,x+36*s,y+42*s,7*s,8*s,dark); self.r(p,x+48*s,y+37*s,19*s,7*s,c); self.r(p,x+59*s,y+38*s,10*s,4*s,dark); self.r(p,x+64*s,y+42*s,7*s,3*s,light)
+        a,b,c,d,e=self.COLORS['너부리']
+        self.ell(p,x+42*s,y+31*s,34*s,17*s,a); self.rect(p,x+55*s,y+34*s,9*s,10*s,e); self.rect(p,x+66*s,y+36*s,7*s,8*s,c)
+        self.ell(p,x+15*s,y+27*s,42*s,40*s,a); self.ell(p,x+20*s,y+31*s,32*s,33*s,b)
+        self.poly(p,[(x+16*s,y+21*s),(x+18*s,y+3*s),(x+31*s,y+18*s)],a); self.poly(p,[(x+39*s,y+18*s),(x+52*s,y+3*s),(x+54*s,y+22*s)],a)
+        self.poly(p,[(x+20*s,y+15*s),(x+22*s,y+9*s),(x+27*s,y+16*s)],d); self.poly(p,[(x+43*s,y+16*s),(x+50*s,y+9*s),(x+50*s,y+17*s)],d)
+        self.ell(p,x+13*s,y+12*s,44*s,36*s,c)
+        self.poly(p,[(x+14*s,y+24*s),(x+25*s,y+18*s),(x+35*s,y+22*s),(x+45*s,y+18*s),(x+57*s,y+24*s),(x+48*s,y+36*s),(x+35*s,y+32*s),(x+23*s,y+36*s)],e)
+        self.ell(p,x+22*s,y+23*s,8*s,7*s,d); self.ell(p,x+41*s,y+23*s,8*s,7*s,d); self.ell(p,x+25*s,y+25*s,3*s,3*s,e); self.ell(p,x+44*s,y+25*s,3*s,3*s,e); self.ell(p,x+31*s,y+29*s,8*s,6*s,e)
+        self.ell(p,x+17*s,y+57*s,12*s,9*s,c); self.ell(p,x+43*s,y+57*s,12*s,9*s,c)
     def cat(self,p,x,y,s):
-        c='#b0a39a'; dark='#5d5753'; light='#d4c7b8'
-        self.r(p,x+12*s,y+7*s,34*s,28*s,c); self.r(p,x+15*s,y+2*s,10*s,10*s,c); self.r(p,x+34*s,y+2*s,10*s,10*s,c); self.r(p,x+16*s,y+15*s,28*s,12*s,light); self.r(p,x+20*s,y+17*s,5*s,5*s,dark); self.r(p,x+35*s,y+17*s,5*s,5*s,dark); self.r(p,x+27*s,y+23*s,7*s,4*s,'#7e6962'); self.r(p,x+25*s,y+31*s,24*s,20*s,c); self.r(p,x+18*s,y+45*s,7*s,12*s,dark); self.r(p,x+41*s,y+45*s,7*s,12*s,dark); self.r(p,x+47*s,y+34*s,23*s,7*s,c); self.r(p,x+63*s,y+38*s,12*s,5*s,dark)
-        # Alfredo only: simple pixel tie + glasses
-        self.r(p,x+29*s,y+33*s,7*s,14*s,'#403a36'); self.r(p,x+28*s,y+34*s,9*s,3*s,'#d0b06b'); self.r(p,x+18*s,y+15*s,8*s,2*s,'#d0b06b'); self.r(p,x+35*s,y+15*s,8*s,2*s,'#d0b06b')
+        a,b,c,d,e=self.COLORS['알프레도']
+        self.line(p,(x+48*s,y+45*s),(x+71*s,y+34*s),a,7); self.line(p,(x+69*s,y+34*s),(x+76*s,y+39*s),a,6)
+        self.ell(p,x+17*s,y+27*s,41*s,41*s,a); self.ell(p,x+22*s,y+31*s,31*s,33*s,b)
+        self.poly(p,[(x+17*s,y+21*s),(x+19*s,y+2*s),(x+31*s,y+17*s)],a); self.poly(p,[(x+39*s,y+17*s),(x+52*s,y+2*s),(x+54*s,y+22*s)],a)
+        self.poly(p,[(x+21*s,y+15*s),(x+22*s,y+8*s),(x+28*s,y+15*s)],d); self.poly(p,[(x+42*s,y+15*s),(x+50*s,y+8*s),(x+50*s,y+16*s)],d)
+        self.ell(p,x+14*s,y+11*s,43*s,36*s,b)
+        self.ell(p,x+23*s,y+21*s,8*s,8*s,e); self.ell(p,x+42*s,y+21*s,8*s,8*s,e); self.ell(p,x+26*s,y+23*s,3*s,3*s,a); self.ell(p,x+45*s,y+23*s,3*s,3*s,a)
+        self.ell(p,x+32*s,y+29*s,8*s,6*s,a); self.line(p,(x+36*s,y+34*s),(x+36*s,y+38*s),a,2)
+        self.line(p,(x+35*s,y+37*s),(x+28*s,y+36*s),a,1); self.line(p,(x+37*s,y+37*s),(x+44*s,y+36*s),a,1)
+        self.ell(p,x+27*s,y+42*s,19*s,24*s,c); self.ell(p,x+18*s,y+57*s,13*s,10*s,b); self.ell(p,x+44*s,y+57*s,13*s,10*s,b)
+        # Alfredo only: subtle glasses + tie, keeping a cat body.
+        self.line(p,(x+22*s,y+20*s),(x+32*s,y+20*s),d,2); self.line(p,(x+40*s,y+20*s),(x+50*s,y+20*s),d,2)
+        self.poly(p,[(x+33*s,y+40*s),(x+39*s,y+40*s),(x+36*s,y+55*s)],e); self.rect(p,x+31*s,y+40*s,10*s,3*d if False else 3*s,d)
 
 class CharacterLayer:
-    DESKS={'현무':(70,245,130),'김선달':(335,245,130),'이묵':(600,245,130),'너부리':(865,245,130),'알프레도':(1130,245,130)}
-    POSITIONS={n:(x+w//2-75,300) for n,(x,y,w) in DESKS.items()}
-    MEETING_POSITIONS={'현무':(410,355),'김선달':(525,355),'이묵':(640,355),'너부리':(755,355),'알프레도':(870,355)}
-    DOOR=(48.0,430.0)
+    # These are the original prototype station coordinates, retained exactly.
+    DESKS={'현무':(55,244,145),'김선달':(335,244,145),'이묵':(615,244,145),'너부리':(895,244,145),'알프레도':(1175,244,145)}
+    POSITIONS={n:(x+45,296) for n,(x,y,w) in DESKS.items()}
+    MEETING_POSITIONS={'현무':(400,335),'김선달':(515,335),'이묵':(630,335),'너부리':(745,335),'알프레도':(860,335)}
+    DOOR=(42.0,410.0)
     def __init__(self):
-        self.characters={n:PixelCharacter(n) for n in self.POSITIONS}; self.pos={n:(float(x),float(y)) for n,(x,y) in self.POSITIONS.items()}; self.active={n:True for n in self.POSITIONS}; self.mode='idle'; self.queue=[]; self.move_speed=180; self.bubbles={}; self.bubble_until={}; self.stage='idle'; self.office_open=9<=time.localtime().tm_hour<18
+        self.characters={n:PixelCharacter(n) for n in self.POSITIONS}; self.pos={n:(float(x),float(y)) for n,(x,y) in self.POSITIONS.items()}; self.active={n:True for n in self.POSITIONS}; self.mode='idle'; self.stage='idle'; self.queue=[]; self.move_speed=180.0; self.bubbles={}; self.bubble_until={}; self.office_open=9<=time.localtime().tm_hour<18
         if not self.office_open:self.reset_off_hours()
     def set_office_hours(self,hour,immediate=False):
         open_now=9<=hour<18
@@ -70,59 +100,74 @@ class CharacterLayer:
     def reset_off_hours(self):
         self.mode='off_hours';self.stage='idle';self.queue=[];self.clear_bubbles()
         for n in self.POSITIONS:self.active[n]=False;self.pos[n]=self.DOOR
-    def summon_for_question(self,overtime=False):
-        self.mode='meeting_arrival';self.stage='summon';self.queue=list(self.POSITIONS);self.clear_bubbles();self.move_speed=180
+    def start_arrival(self):
+        self.mode='arrival';self.stage='arrival';self.queue=list(self.POSITIONS);self.clear_bubbles()
         for n in self.POSITIONS:self.active[n]=True;self.pos[n]=self.DOOR
+    def start_departure(self): self.mode='leaving';self.stage='leaving';self.queue=list(self.POSITIONS)
+    def summon_for_question(self,overtime=False):
+        self.mode='meeting_arrival';self.stage='summon';self.queue=list(self.POSITIONS);self.clear_bubbles()
+        for n in self.POSITIONS:self.active[n]=True;self.pos[n]=self.DOOR
+    def begin_meeting(self):
+        self.mode='meeting';self.stage='meeting';self.queue=[]
+        for n,(x,y) in self.MEETING_POSITIONS.items():self.active[n]=True;self.pos[n]=(float(x),float(y))
     def set_meeting_stage(self,stage):
         if stage=='summon':self.summon_for_question()
-        elif stage=='meeting':
-            self.mode='meeting';self.stage='meeting';self.queue=[]
-            for n,(x,y) in self.MEETING_POSITIONS.items():self.active[n]=True;self.pos[n]=(float(x),float(y))
+        elif stage=='meeting':self.begin_meeting()
         elif stage=='verdict':self.show_final_verdict()
         elif stage=='return':self.reset_office() if self.office_open else self.reset_off_hours()
-    def set_bubble(self,name,text,duration_ms=12000):
+    def set_bubble(self,name,text,duration_ms=20000):
         text=' '.join(str(text).split()).strip()
-        if name in self.POSITIONS and text:self.bubbles[name]=text[:300];self.bubble_until[name]=time.time()+duration_ms/1000
+        if name in self.POSITIONS and text:self.bubbles[name]=text[:420];self.bubble_until[name]=time.time()+duration_ms/1000.0
     def set_meeting_log(self,log):
-        found=False
+        txt=str(log); found=False
         for name in ('현무','김선달','이묵','너부리'):
-            for pat in [rf'{re.escape(name)}[^\n]*[:：]\s*(.+)',rf'###\s*.*{re.escape(name)}.*\n(.+?)(?=\n###|\Z)']:
-                m=list(re.finditer(pat,str(log),re.S))
-                if m:self.set_bubble(name,m[-1].group(1).strip().split('\n')[0],20000);found=True;break
+            hits=[]
+            for pat in [rf'###\s*\*?[^\n]*{re.escape(name)}[^\n]*\n(.+?)(?=\n###|\Z)',rf'{re.escape(name)}\s*[:：]\s*(.+)']:
+                hits += list(re.finditer(pat,txt,re.S))
+            if hits:
+                block=hits[-1].group(1).strip(); lines=[v.strip(' -*') for v in block.splitlines() if v.strip()]
+                line=next((v for v in lines if len(v)>12),lines[0] if lines else '')
+                if line:self.set_bubble(name,line,24000);found=True
         return found
-    def show_final_verdict(self,error=False):self.mode='verdict';self.stage='verdict';self.clear_bubbles();self.set_bubble('알프레도','분석완료! 회의완료! 최종 판단을 정리하겠습니다.',10000)
+    def show_final_verdict(self,error=False):
+        self.mode='verdict';self.stage='verdict';self.clear_bubbles();self.set_bubble('알프레도','분석완료! 회의완료! 최종 판단을 정리했습니다.',12000)
     def clear_bubbles(self):self.bubbles={};self.bubble_until={}
     def tick(self):
         now=time.time()
         for c in self.characters.values():c.tick()
         for n,t in list(self.bubble_until.items()):
             if now>t:self.bubble_until.pop(n,None);self.bubbles.pop(n,None)
-        if self.mode=='meeting_arrival':
+        if self.mode in ('arrival','meeting_arrival'):
             remaining=[]
             for n in self.queue:
-                tx,ty=self.MEETING_POSITIONS[n];x,y=self.pos[n];dx,dy=tx-x,ty-y;d=(dx*dx+dy*dy)**0.5
+                tx,ty=self.MEETING_POSITIONS[n] if self.mode=='meeting_arrival' else self.POSITIONS[n];x,y=self.pos[n];dx,dy=tx-x,ty-y;d=(dx*dx+dy*dy)**0.5
                 if d<=self.move_speed:self.pos[n]=(float(tx),float(ty))
                 else:self.pos[n]=(x+dx/d*self.move_speed,y+dy/d*self.move_speed);remaining.append(n)
             self.queue=remaining
-            if not self.queue:
-                self.mode='meeting';self.stage='meeting'
-                self.set_bubble('현무','시장부터 보겠습니다. 거시환경이 지금 어느 방향인지 확인해야 합니다.',20000)
-                self.set_bubble('김선달','숫자만 보면 안 됩니다. 실적하고 최근 뉴스부터 짚고 가죠.',20000)
-                self.set_bubble('이묵','잠깐. 차트는 다른 이야기를 하고 있습니다. 추세부터 보시죠.',20000)
-                self.set_bubble('너부리','좋습니다. 그런데 이걸 지금 계좌 비중에 넣어도 되는지도 봐야 합니다.',20000)
+            if not remaining:
+                if self.mode=='meeting_arrival':self.begin_meeting()
+                else:self.mode='idle';self.stage='idle'
+        elif self.mode=='leaving':
+            remaining=[]
+            for n in self.queue:
+                tx,ty=self.DOOR;x,y=self.pos[n];dx,dy=tx-x,ty-y;d=(dx*dx+dy*dy)**0.5
+                if d<=self.move_speed:self.pos[n]=(float(tx),float(ty));self.active[n]=False
+                else:self.pos[n]=(x+dx/d*self.move_speed,y+dy/d*self.move_speed);remaining.append(n)
+            self.queue=remaining
     def paint(self,p):
         for n in self.POSITIONS:
-            if self.active[n]:self.characters[n].paint(p,self.pos[n][0],self.pos[n][1],3)
+            if self.active[n]:self.characters[n].paint(p,self.pos[n][0],self.pos[n][1],2.25)
         for n,text in list(self.bubbles.items()):
             if self.active.get(n,False):self._bubble(p,n,text,self.pos[n][0],self.pos[n][1])
     def _bubble(self,p,name,text,x,y):
-        chunks=[];cur=''
-        for ch in str(text).replace('\n',' '):
-            cur+=ch
-            if len(cur)>=18:chunks.append(cur);cur=''
-        if cur:chunks.append(cur)
-        lines=chunks[:7] or ['...'];bw=max(240,min(390,max(len(v) for v in lines)*9+34));bh=24+len(lines)*19;bx,by=int(x+30),int(y-bh-18)
-        if bx+bw>1490:bx=int(x-bw+10)
-        if bx<10:bx=10
+        words=str(text).replace('\n',' ').split();lines=[];cur=''
+        for word in words:
+            nxt=(cur+' '+word).strip()
+            if len(nxt)>25 and cur:lines.append(cur);cur=word
+            else:cur=nxt
+        if cur:lines.append(cur)
+        lines=lines[:8] or ['...']; bw=max(240,min(410,max(26,max(map(len,lines)))*8+32));bh=18+len(lines)*17;bx=int(x+45);by=int(y-bh-18)
+        if bx+bw>1490:bx=int(x-bw+15)
+        if bx<8:bx=8
         if by<8:by=8
-        p.setPen(QColor('#9b8968'));p.setBrush(QColor('#f4ecda'));p.drawRoundedRect(bx,by,bw,bh,8,8);p.drawPolygon(QPolygon([QPoint(int(x+12),by+bh),QPoint(int(x+29),by+bh),QPoint(int(x+21),by+bh+11)]));p.setPen(QColor('#211f1c'));p.setFont(QFont('Malgun Gothic',8,QFont.Bold));p.drawText(QRect(bx+10,by+6,bw-20,bh-10),Qt.AlignLeft|Qt.AlignVCenter,'\n'.join(lines))
+        p.setPen(QColor('#8f7c5d'));p.setBrush(QColor('#f4ecda'));p.drawRoundedRect(bx,by,bw,bh,9,9);tailx=int(x+20 if bx>x else x+48);p.drawPolygon(QPolygon([QPoint(tailx,by+bh),QPoint(tailx+15,by+bh),QPoint(tailx+7,by+bh+10)]));p.setPen(QColor('#25221e'));p.setFont(QFont('Malgun Gothic',8,QFont.Bold));p.drawText(QRect(bx+10,by+5,bw-20,bh-8),Qt.AlignLeft|Qt.AlignVCenter,'\n'.join(lines))
