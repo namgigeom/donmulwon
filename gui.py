@@ -1,51 +1,73 @@
-import os, sys, io, contextlib, traceback, html, time
+import os, sys, io, contextlib, traceback, html, time, re
 from datetime import datetime
 from math import sin
 from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt, QRect, QTimer
 from PySide6.QtGui import QPainter, QColor, QFont
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextBrowser, QProgressBar, QComboBox
+
 BASE_DIR=os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path: sys.path.insert(0,BASE_DIR)
 from gui_background import PixelBackground
 from gui_characters_v2 import CharacterLayer
+
 class AnalysisWorker(QObject):
     output=Signal(str); failed=Signal(str); finished=Signal()
     def __init__(self,question): super().__init__(); self.question=question
     @Slot()
     def run(self):
         try:
-            import main; buf=io.StringIO()
-            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf): result=main.run_analysis(self.question)
-            log=buf.getvalue().strip(); answer=str(result.get('alfredo','') or result.get('final','') or '').strip() if isinstance(result,dict) else str(result or '').strip()
+            import main
+            buf=io.StringIO()
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+                result=main.run_analysis(self.question)
+            log=buf.getvalue().strip()
+            answer=''
+            if isinstance(result,dict): answer=str(result.get('alfredo','') or result.get('final','') or '').strip()
+            else: answer=str(result or '').strip()
             if not answer: answer='알프레도의 최종 판단이 생성되지 않았습니다.'
             self.output.emit(answer+'\n\n[MEETING_LOG]\n'+log[-16000:])
-        except Exception: self.failed.emit(traceback.format_exc())
-        finally: self.finished.emit()
+        except Exception:
+            self.failed.emit(traceback.format_exc())
+        finally:
+            self.finished.emit()
+
 class ResultPanel(QTextBrowser):
     def __init__(self):
-        super().__init__(); self.setReadOnly(True); self.setMinimumHeight(190); self.setStyleSheet('QTextBrowser{background:#141719;border:1px solid #65543e;padding:10px;color:#eee4d2;}')
+        super().__init__(); self.setReadOnly(True); self.setMinimumHeight(190)
+        self.setStyleSheet('QTextBrowser{background:#141719;border:1px solid #65543e;padding:10px;color:#eee4d2;}')
     def show_result(self,text):
-        raw=text.split('[MEETING_LOG]')[0].strip() or '최종 분석 결과가 없습니다.'; safe=html.escape(raw).replace('\n','<br>')
+        raw=text.split('[MEETING_LOG]')[0].strip() or '최종 분석 결과가 없습니다.'
+        safe=html.escape(raw).replace('\n','<br>')
         self.setHtml('<div style="font-family:Malgun Gothic;color:#eee4d2;font-size:10pt"><div style="color:#c8a866;font-size:12pt;font-weight:700;margin-bottom:8px">🐱 알프레도 · ANALYSIS RESULT</div><div style="background:#29231b;border:1px solid #9b7c4c;padding:12px;border-radius:7px">'+safe+'</div></div>')
     def show_waiting(self): self.setHtml('<div style="color:#8f877b;padding:18px">회의가 끝나면 알프레도의 최종 검증 결과가 이곳에 정리됩니다.</div>')
+
 class MeetingLogPanel(QTextBrowser):
     def __init__(self):
-        super().__init__(); self.setReadOnly(True); self.setMaximumHeight(155); self.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:8px;color:#bfb6a6;}')
-    def set_status(self,title,detail): self.setHtml(f'<div style="font-family:Malgun Gothic;color:#eee4d2"><b>{html.escape(title)}</b><br><span style="color:#a49a8b">{html.escape(detail)}</span></div>')
+        super().__init__(); self.setReadOnly(True); self.setMaximumHeight(155)
+        self.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:8px;color:#bfb6a6;}')
+    def set_status(self,title,detail):
+        self.setHtml(f'<div style="font-family:Malgun Gothic;color:#eee4d2"><b>{html.escape(title)}</b><br><span style="color:#a49a8b">{html.escape(detail)}</span></div>')
+
 class PixelOffice(QWidget):
-    DESKS=[('현무',55,244,175),('김선달',320,244,175),('이묵',585,244,175),('너부리',850,244,175),('알프레도',1115,244,175)]
+    # Five compact stations. The old 175px desks made the office look like one long counter.
+    DESKS=[('현무',55,244,145),('김선달',335,244,145),('이묵',615,244,145),('너부리',895,244,145),('알프레도',1175,244,145)]
     ROLE={'김선달':'FUNDAMENTALS + NEWS','이묵':'TECHNICAL','너부리':'PORTFOLIO','현무':'MACRO','알프레도':'FINAL VERIFIER'}
     PORTFOLIO=[('VOO','51.9%','$702.56'),('JEPQ','13.0%','$59.78'),('TTWO','24.0%','$215.47'),('JOBY','5.6%','$6.39'),('ALAB','5.5%','$291.22')]
     def __init__(self): super().__init__(); self.background=PixelBackground(); self.characters=CharacterLayer(); self.setMinimumHeight(560); self.active_ticker='MARKET'
     def set_weather(self,v): self.background.set_weather(v); self.update()
     def auto_time(self):
-        now=datetime.now(); self.background.set_clock(now); h=self.background.hour; self.characters.set_office_hours(h,immediate=True); return '아침' if 5<=h<11 else '낮' if 11<=h<17 else '저녁' if 17<=h<21 else '밤'
+        now=datetime.now(); self.background.set_clock(now); h=self.background.hour; self.characters.set_office_hours(h,immediate=True)
+        return '아침' if 5<=h<11 else '낮' if 11<=h<17 else '저녁' if 17<=h<21 else '밤'
     @staticmethod
     def rect(p,x,y,w,h,c): p.setPen(Qt.NoPen); p.setBrush(QColor(c)); p.drawRect(int(x),int(y),int(w),int(h))
     @staticmethod
     def text(p,x,y,w,h,v,size=8,c='#eee4d2',align=Qt.AlignLeft|Qt.AlignVCenter): p.setPen(QColor(c)); p.setFont(QFont('Malgun Gothic',size,QFont.Bold)); p.drawText(QRect(int(x),int(y),int(w),int(h)),align,str(v))
     def paintEvent(self,e):
-        p=QPainter(self); p.setRenderHint(QPainter.Antialiasing,False); w,h=self.width(),self.height(); self.background.paint(p,w,h); self.draw_room(p,w,h); self.draw_window(p,w); self.draw_furniture(p,w,h); self.draw_desks(p); self.draw_market(p,w); self.draw_account(p); self.characters.paint(p); p.end()
+        p=QPainter(self); p.setRenderHint(QPainter.Antialiasing,False)
+        try:
+            w,h=self.width(),self.height(); self.background.paint(p,w,h); self.draw_room(p,w,h); self.draw_window(p,w); self.draw_furniture(p,w,h); self.draw_desks(p); self.draw_market(p,w); self.draw_account(p); self.characters.paint(p)
+        finally:
+            if p.isActive(): p.end()
     def draw_room(self,p,w,h):
         self.rect(p,18,18,w-36,28,'#3b2b22'); self.rect(p,18,46,w-36,6,'#80664c'); self.rect(p,18,52,w-36,172,'#765d46'); self.rect(p,18,224,w-36,h-242,'#55483d'); p.setPen(QColor('#655448'))
         for x in range(28,w-20,54): p.drawLine(x,224,x,h-18)
@@ -76,44 +98,72 @@ class PixelOffice(QWidget):
         self.rect(p,x,base-4,ww,4,{'아침':'#61704e','낮':'#6e8b62','저녁':'#4b4d3b','밤':'#263a2b'}[phase]); p.setPen(QColor('#4b4034')); p.setBrush(Qt.NoBrush); p.drawRect(x,y,ww,wh)
         for xx in [x+ww//3,x+2*ww//3]: p.drawRect(xx,y,5,wh)
     def draw_furniture(self,p,w,h):
-        x=w//2-150; y=h-175; self.rect(p,x-8,y-8,316,96,'#34271f'); self.rect(p,x,y,300,80,'#7a5337'); self.rect(p,x+8,y+8,284,64,'#63442f'); self.text(p,x+20,y+8,260,18,'AI TRADING TEAM · MEETING TABLE',8,'#e0c98e',Qt.AlignCenter); self.text(p,x+25,y+34,250,22,'DISCUSS · DISAGREE · VERIFY',7,'#a99d8c',Qt.AlignCenter)
-        for cx,cy in [(x-32,y+25),(x+306,y+25),(x+55,y+88),(x+215,y+88)]: self.rect(p,cx,cy,32,25,'#382a23'); self.rect(p,cx+4,cy+4,24,17,'#67472f')
-        sx=w-230; sy=h-155; self.rect(p,sx,sy,150,105,'#34261f'); self.rect(p,sx+8,sy+8,134,89,'#65462f')
-        for i,t in enumerate(['RESEARCH','REPORTS','HISTORY']): self.rect(p,sx+16,sy+18+i*23,116,16,'#3a2b24'); self.text(p,sx+20,sy+18+i*23,108,16,t,6,'#c7b27d',Qt.AlignCenter)
+        x=w//2-125; y=h-175; self.rect(p,x-8,y-8,266,86,'#34271f'); self.rect(p,x,y,250,70,'#7a5337'); self.rect(p,x+8,y+8,234,54,'#63442f'); self.text(p,x+12,y+7,226,17,'AI TEAM · MEETING TABLE',7,'#e0c98e',Qt.AlignCenter); self.text(p,x+15,y+30,220,20,'DISCUSS · DISAGREE · VERIFY',6,'#a99d8c',Qt.AlignCenter)
+        for cx,cy in [(x-28,y+22),(x+246,y+22),(x+42,y+77),(x+176,y+77)]: self.rect(p,cx,cy,28,22,'#382a23'); self.rect(p,cx+4,cy+4,20,14,'#67472f')
+        sx=w-210; sy=h-145; self.rect(p,sx,sy,145,100,'#34261f'); self.rect(p,sx+8,sy+8,129,84,'#65462f')
+        for i,t in enumerate(['RESEARCH','REPORTS','HISTORY']): self.rect(p,sx+15,sy+16+i*22,114,15,'#3a2b24'); self.text(p,sx+19,sy+16+i*22,106,15,t,6,'#c7b27d',Qt.AlignCenter)
     def draw_desks(self,p):
         for name,x,y,dw in self.DESKS:
-            self.rect(p,x+10,y+65,dw-20,12,'#30241e'); self.rect(p,x-4,y-4,dw+8,65,'#34261f'); self.rect(p,x,y,dw,56,'#775236'); self.rect(p,x+5,y+5,dw-10,46,'#89603e'); mx=x+dw//2-43; self.rect(p,mx,y+7,86,35,'#171b1e'); self.rect(p,mx+5,y+11,76,26,'#182b30'); self.rect(p,mx+32,y+42,22,7,'#1a1c1f'); self.rect(p,mx+20,y+49,46,4,'#302b27'); pts=[(mx+9,y+32),(mx+18,y+28),(mx+27,y+30),(mx+37,y+21),(mx+49,y+26),(mx+60,y+16),(mx+72,y+21)]; p.setPen(QColor('#d4bb76'))
+            self.rect(p,x+8,y+61,dw-16,10,'#30241e'); self.rect(p,x-4,y-4,dw+8,61,'#34261f'); self.rect(p,x,y,dw,52,'#775236'); self.rect(p,x+5,y+5,dw-10,42,'#89603e')
+            mx=x+dw//2-35; self.rect(p,mx,y+7,70,30,'#171b1e'); self.rect(p,mx+4,y+10,62,22,'#182b30'); self.rect(p,mx+26,y+37,18,6,'#1a1c1f'); self.rect(p,mx+16,y+43,38,4,'#302b27')
+            pts=[(mx+7,y+27),(mx+16,y+23),(mx+25,y+25),(mx+34,y+18),(mx+45,y+22),(mx+54,y+13),(mx+63,y+19)]; p.setPen(QColor('#d4bb76'))
             for a,b in zip(pts,pts[1:]): p.drawLine(*a,*b)
-            p.setPen(Qt.NoPen); self.rect(p,x+12,y+13,24,3,'#a0744d'); self.rect(p,x+dw-42,y+13,28,3,'#5e3f2c'); self.rect(p,x+dw//2-34,y+47,68,6,'#303033'); self.rect(p,x+dw-29,y+43,12,9,'#4e6652'); self.rect(p,x+8,y+43,62,10,'#3a2b23'); self.text(p,x+10,y+47,60,12,name,6,'#e1cb91',Qt.AlignCenter); self.text(p,x,y+78,dw,18,self.ROLE[name],5,'#9f927d',Qt.AlignCenter)
+            p.setPen(Qt.NoPen); self.rect(p,x+10,y+12,20,3,'#a0744d'); self.rect(p,x+dw-34,y+12,24,3,'#5e3f2c'); self.rect(p,x+dw//2-28,y+43,56,5,'#303033'); self.rect(p,x+dw-25,y+40,10,8,'#4e6652'); self.rect(p,x+8,y+40,54,9,'#3a2b23'); self.text(p,x+9,y+43,58,11,name,6,'#e1cb91',Qt.AlignCenter); self.text(p,x,y+72,dw,17,self.ROLE[name],5,'#9f927d',Qt.AlignCenter)
     def draw_market(self,p,w):
         x=150;y=205;ww=min(610,w-670);self.rect(p,x-4,y-4,ww+8,44,'#30241e');self.rect(p,x,y,ww,36,'#171d20');self.text(p,x+12,y+5,190,15,'MARKET BOARD',7,'#d8c48e');self.text(p,x+205,y+5,ww-220,15,self.active_ticker,7,'#9ab0a8',Qt.AlignRight);self.text(p,x+12,y+20,ww-24,13,'VOO +5.74%   JEPQ +0.00%   TTWO -2.36%   JOBY -9.23%   ALAB -6.82%',5,'#cdb985')
     def draw_account(self,p):
         w=self.width(); x=w-205;y=55;ww=175;hh=140;self.rect(p,x,y,ww,hh,'#252a2c');self.rect(p,x+5,y+5,ww-10,hh-10,'#172024');self.text(p,x+12,y+10,150,18,'ACCOUNT',8,'#d8c48e');self.text(p,x+12,y+28,150,14,'LIVE HOLDINGS',5,'#8fa69a');yy=y+48
         for t,wt,val in self.PORTFOLIO:self.text(p,x+10,yy,45,14,t,5,'#eee4d2');self.text(p,x+57,yy,42,14,wt,5,'#cdb985',Qt.AlignRight);self.text(p,x+101,yy,62,14,val,5,'#aebbb2',Qt.AlignRight);yy+=18
     def set_ticker(self,t): self.active_ticker=t or 'MARKET'; self.update()
+
 class MainWindow(QMainWindow):
     def __init__(self):
-        super().__init__(); self.setWindowTitle('돈물원 · DONMULWON'); self.resize(1500,980); self.setMinimumSize(1180,820); self.setStyleSheet('QMainWindow{background:#101315;color:#ded7c5;} QLabel{color:#ded7c5;} QLineEdit,QTextBrowser,QComboBox{background:#1d2225;color:#eee4d2;border:1px solid #51483b;padding:7px;} QPushButton{background:#665039;color:#fff2d4;padding:8px 16px;border:1px solid #8a6c4c;} QProgressBar{border:1px solid #51483b;background:#202428;} QProgressBar::chunk{background:#806544;}')
-        root=QWidget(); layout=QVBoxLayout(root); layout.setContentsMargins(14,10,14,10); layout.setSpacing(8); top=QHBoxLayout(); title=QLabel('🏦 DONMULWON · PIXEL TRADING OFFICE'); title.setStyleSheet('font-size:21px;font-weight:700;'); top.addWidget(title); top.addStretch(); self.clock=QLabel(); top.addWidget(self.clock); layout.addLayout(top); self.office=PixelOffice(); layout.addWidget(self.office,1)
+        super().__init__(); self.setWindowTitle('돈물원 · DONMULWON'); self.resize(1500,980); self.setMinimumSize(1180,820)
+        self.setStyleSheet('QMainWindow{background:#101315;color:#ded7c5;} QLabel{color:#ded7c5;} QLineEdit,QTextBrowser,QComboBox{background:#1d2225;color:#eee4d2;border:1px solid #51483b;padding:7px;} QPushButton{background:#665039;color:#fff2d4;padding:8px 16px;border:1px solid #8a6c4c;} QProgressBar{border:1px solid #51483b;background:#202428;} QProgressBar::chunk{background:#806544;}')
+        root=QWidget(); layout=QVBoxLayout(root); layout.setContentsMargins(14,10,14,10); layout.setSpacing(8)
+        top=QHBoxLayout(); title=QLabel('🏦 DONMULWON · PIXEL TRADING OFFICE'); title.setStyleSheet('font-size:21px;font-weight:700;'); top.addWidget(title); top.addStretch(); self.clock=QLabel(); top.addWidget(self.clock); layout.addLayout(top)
+        self.office=PixelOffice(); layout.addWidget(self.office,1)
         controls=QHBoxLayout(); self.input=QLineEdit(); self.input.setPlaceholderText('예: JOBY 지금 사도 괜찮아? / 내 계좌 전체적으로 봐줘'); self.button=QPushButton('분석 시작'); self.button.clicked.connect(self.start_analysis); self.input.returnPressed.connect(self.start_analysis); self.weather=QComboBox(); self.weather.addItems(['맑음','비','눈']); self.weather.currentTextChanged.connect(self.office.set_weather); controls.addWidget(self.input,1); controls.addWidget(self.weather); controls.addWidget(self.button); layout.addLayout(controls)
-        self.status=QLabel('대기 중 · 실제 시각 기준 사무실 상태'); layout.addWidget(self.status); self.progress=QProgressBar(); self.progress.setRange(0,0); self.progress.hide(); layout.addWidget(self.progress); self.meeting=MeetingLogPanel(); layout.addWidget(self.meeting); self.result=ResultPanel(); self.result.show_waiting(); layout.addWidget(self.result); self.setCentralWidget(root); self.thread=None; self.worker=None; self.started_at=0; self.pending_result=None
-        self.timer=QTimer(self); self.timer.timeout.connect(self.update_clock); self.timer.timeout.connect(self.animate); self.timer.start(500); self.update_clock()
+        self.status=QLabel('대기 중 · 실제 시각 기준 사무실 상태 유지'); layout.addWidget(self.status)
+        self.progress=QProgressBar(); self.progress.setRange(0,100); self.progress.setValue(0); self.progress.hide(); layout.addWidget(self.progress)
+        self.meeting=MeetingLogPanel(); self.meeting.set_status('대기 중','분석을 시작하면 전원이 출입문에서 회의실로 이동합니다.'); layout.addWidget(self.meeting)
+        self.result=ResultPanel(); self.result.show_waiting(); layout.addWidget(self.result)
+        self.setCentralWidget(root); self.thread=None; self.worker=None; self.meeting_started_at=0.0
+        self.timer=QTimer(self); self.timer.timeout.connect(self.update_clock); self.timer.timeout.connect(self.animate); self.timer.start(250); self.update_clock()
+
     def animate(self): self.office.characters.tick(); self.office.update()
     def update_clock(self):
         now=datetime.now(); period=self.office.auto_time(); self.clock.setText(now.strftime('%Y-%m-%d  %H:%M:%S')+' · '+period); self.office.update()
-        if self.thread is not None:self.status.setText(f'⚔️ AI TRADING TEAM 회의 진행 중 · {int(time.monotonic()-self.started_at)}초 경과')
+        if self.thread is not None:
+            elapsed=int(time.time()-self.meeting_started_at); self.status.setText(f'⚔️ AI TRADING TEAM 회의 진행 중 · {elapsed}초 경과')
+
     def start_analysis(self):
         q=self.input.text().strip()
-        if not q or self.thread is not None:return
-        self.started_at=time.monotonic(); self.pending_result=None; self.office.characters.summon_for_question(overtime=True); self.office.update(); self.button.setEnabled(False); self.progress.show(); self.meeting.set_status('⚔ AI TRADING TEAM 회의 시작','긴급 호출 · 전원이 출입문으로 출근 중...'); self.result.show_waiting(); self.status.setText('⚔️ AI TRADING TEAM 회의 준비 중...')
+        if not q or self.thread is not None: return
+        self.meeting_started_at=time.time(); self.office.characters.summon_for_question(overtime=True); self.office.update()
+        self.button.setEnabled(False); self.progress.show(); self.progress.setRange(0,100); self.progress.setValue(5)
+        self.meeting.set_status('⚔ AI TRADING TEAM 회의 시작','긴급 호출 · 전원이 출입문으로 출근하는 중...')
+        self.result.show_waiting(); self.status.setText('⚔️ AI TRADING TEAM 회의 진행 중...')
         self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(self.on_output); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(self.analysis_done); self.thread.start()
+
     def on_output(self,text):
-        self.pending_result=text; log=text.split('[MEETING_LOG]')[-1].strip(); self.office.characters.set_meeting_log(log); self.meeting.set_status('🗣️ 회의 발언 정리','4명의 의견을 확인했습니다. 이제 알프레도가 최종 검증합니다.'); QTimer.singleShot(2200,self.finalize_result)
-    def finalize_result(self):
-        if not self.pending_result:return
-        self.office.characters.show_final_verdict(); self.result.show_result(self.pending_result); self.meeting.set_status('🐱 알프레도 · 분석완료!','회의완료 · 최종 판단을 분석 결과에 정리했습니다.'); self.office.update()
+        self.progress.setValue(82); self.meeting.set_status('⚔ 4인 분석 완료 · 알프레도 최종 검증 준비','현무 · 김선달 · 이묵 · 너부리 의견을 취합했습니다. 잠시 후 알프레도가 결론을 발표합니다.')
+        log=text.split('[MEETING_LOG]',1)[1] if '[MEETING_LOG]' in text else ''
+        self.office.characters.set_meeting_log(log)
+        self.office.characters.set_meeting_stage('verdict')
+        self.office.update()
+        self._pending_result=text
+        QTimer.singleShot(6500,self._show_result_after_verdict)
+
+    def _show_result_after_verdict(self):
+        if getattr(self,'_pending_result',None):
+            self.progress.setValue(100); self.result.show_result(self._pending_result); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self._pending_result=None; self.office.update()
+
     def on_failed(self,err):
-        self.pending_result='분석 실패\n\n'+err; self.meeting.set_status('❌ 분석 실패','API 또는 main.py에서 오류가 발생했습니다.'); self.result.show_result(self.pending_result); self.office.characters.show_final_verdict(error=True)
-    def analysis_done(self): self.thread=None; self.worker=None; self.button.setEnabled(True); self.progress.hide(); self.status.setText('분석 완료 · 알프레도 최종 결과 표시 완료')
+        self.progress.setValue(100); self.meeting.set_status('❌ 분석 실패','오류가 발생했습니다. 상세 내용은 아래 최종 결과 영역에서 확인할 수 있습니다.'); self.result.show_result('분석 실패\n\n'+err); self.office.characters.show_final_verdict(error=True); self.office.update()
+
+    def analysis_done(self):
+        self.thread=None; self.worker=None; self.button.setEnabled(True); self.progress.hide(); self.status.setText('분석 완료 · 현재 시각 기준 사무실 상태 유지')
+
 if __name__=='__main__':
     app=QApplication(sys.argv); win=MainWindow(); win.show(); sys.exit(app.exec())
