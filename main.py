@@ -108,10 +108,33 @@ def run_meeting(parsed,modules,account_data):
 최종 답변은 1) 알프레도 판단 2) 종목별 행동+현재가 3) 종목별 핵심 기준 가격 4) 핵심 이유 2~4개 5) 네 AI의 핵심 의견 1줄씩 순서로 압축한다.
 """
         team_for_cat={key:{"file":None,"content":normalize_result(value)} for key,value in team_results.items()}
-        try: cat_started=time.time(); cat_result=cat.analyze(question=parsed["question"]+"\n\n"+instruction,ticker=cat_filename_label,team_analyses=team_for_cat,account_context=account_data); print(f"⏱️ 알프레도 검증 완료 ({time.time()-cat_started:.1f}초)")
-        except Exception as e: print(f"❌ 알프레도 오류: {type(e).__name__}: {e}")
+        try:
+            cat_started=time.time()
+            cat_result=cat.analyze(question=parsed["question"]+"\n\n"+instruction,ticker=cat_filename_label,team_analyses=team_for_cat,account_context=account_data)
+            cat_result=normalize_result(cat_result).strip()
+            # Gemini/Router가 빈 text를 반환하는 경우 GUI가 "최종 판단 없음"으로
+            # 끝나지 않도록 한 번만 재요청한다. 기존 분석 데이터는 그대로 사용한다.
+            if not cat_result:
+                print("⚠️ 알프레도 응답 본문이 비어 있어 최종 검증을 1회 재시도합니다.")
+                retry_instruction=instruction+"\\n\\n[재시도 규칙] 반드시 빈 응답을 반환하지 말고 최종 판단을 일반 텍스트로 작성한다. 데이터가 부족한 항목은 '확인 필요'라고 명시한다."
+                cat_result=cat.analyze(question=parsed["question"]+"\\n\\n"+retry_instruction,ticker=cat_filename_label,team_analyses=team_for_cat,account_context=account_data)
+                cat_result=normalize_result(cat_result).strip()
+            print(f"⏱️ 알프레도 검증 완료 ({time.time()-cat_started:.1f}초)")
+        except Exception as e:
+            print(f"❌ 알프레도 오류: {type(e).__name__}: {e}")
+            cat_result=""
     else: print("❌ 알프레도 모듈을 사용할 수 없습니다.")
-    final_data={**package,"alfredo":normalize_result(cat_result)}; final_path=save_meeting_file("final_meeting",final_data)
+    alfredo_text=normalize_result(cat_result).strip()
+    if not alfredo_text:
+        # 최종 AI가 실패해도 회의 자체의 결과를 잃지 않는다.
+        debate_summary=normalize_result(debate_result.get("meeting_summary","")).strip()
+        positions=normalize_result(debate_result.get("final_positions",{})).strip()
+        alfredo_text=(
+            "알프레도 최종 검증 응답이 생성되지 않았습니다.\\n\\n"
+            "회의에서 확인된 내용:\\n"+(debate_summary or "확인 가능한 통합 회의 요약이 없습니다.")+
+            ("\\n\\n팀별 최종 입장:\\n"+positions if positions else "")
+        )
+    final_data={**package,"alfredo":alfredo_text}; final_path=save_meeting_file("final_meeting",final_data)
     print("\n"+"━"*70); print("🐱 알프레도 최종 판단"); print("━"*70); print(normalize_result(cat_result) if cat_result else "❌ 최종 판단을 생성하지 못했습니다."); print("━"*70); print(f"💾 최종 회의록: {final_path}")
     set_gui_state("return")
     return final_data
