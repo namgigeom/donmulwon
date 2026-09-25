@@ -135,9 +135,29 @@ def run_meeting(parsed,modules,account_data):
             ("\\n\\n팀별 최종 입장:\\n"+positions if positions else "")
         )
     final_data={**package,"alfredo":alfredo_text}; final_path=save_meeting_file("final_meeting",final_data)
-    print("\n"+"━"*70); print("🐱 알프레도 최종 판단"); print("━"*70); print(normalize_result(cat_result) if cat_result else "❌ 최종 판단을 생성하지 못했습니다."); print("━"*70); print(f"💾 최종 회의록: {final_path}")
+    print("\n"+"━"*70); print("🐱 알프레도 최종 판단"); print("━"*70); print(alfredo_text); print("━"*70); print(f"💾 최종 회의록: {final_path}")
     set_gui_state("return")
     return final_data
+
+def build_ai_portfolio_snapshot(account_data):
+    """Convert one Toss API response into the normalized portfolio contract used by AI/GUI modules."""
+    try:
+        from portfolio_data import build_wallet, build_stocks
+        holdings = account_data.get("holdings", {})
+        cash = account_data.get("cash", {})
+        usd_result = cash.get("USD", {}).get("result", {})
+        krw_result = cash.get("KRW", {}).get("result", {})
+        usd_cash = float(usd_result.get("cashBuyingPower", 0) or 0)
+        krw_cash = float(krw_result.get("cashBuyingPower", 0) or 0)
+        return {
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "wallet": build_wallet(holdings, usd_cash, krw_cash),
+            "stocks": build_stocks(holdings),
+        }
+    except Exception as exc:
+        print(f"⚠️ 포트폴리오 정규화 실패: {type(exc).__name__}: {exc}")
+        return {"generated_at": datetime.now().isoformat(timespec="seconds"), "wallet": {}, "stocks": [], "raw_account_data": account_data}
+
 
 def run_analysis(question):
     question=(question or "").strip()

@@ -4,7 +4,6 @@ from datetime import datetime
 
 import yfinance as yf
 from dotenv import load_dotenv
-from google import genai
 from ai import ai_router
 
 
@@ -50,17 +49,6 @@ ENV_FILE = os.path.join(
 # ============================================================
 
 load_dotenv(ENV_FILE)
-
-api_key = os.getenv("GEMINI_API_KEY")
-
-if not api_key:
-    raise Exception(
-        "GEMINI_API_KEY가 없습니다."
-    )
-
-client = genai.Client(
-    api_key=api_key
-)
 
 
 # ============================================================

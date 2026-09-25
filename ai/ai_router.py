@@ -196,11 +196,16 @@ def generate_content(
         )
 
     # --------------------------------------------------------
-    # 1. Gemini
+    # 1. Gemini (키가 있을 때만 시도)
     # --------------------------------------------------------
     gemini_error = None
 
-    for attempt in range(GEMINI_MAX_RETRIES + 1):
+    if GEMINI_API_KEY:
+        gemini_attempts = range(GEMINI_MAX_RETRIES + 1)
+    else:
+        gemini_attempts = []
+
+    for attempt in gemini_attempts:
         try:
             result = _gemini_generate(
                 prompt=prompt,
@@ -227,9 +232,10 @@ def generate_content(
         else OPENROUTER_MODEL
     )
 
-    print(
-        "🟡 Gemini 실패/한도 감지 → OpenRouter 자동 전환"
-    )
+    if GEMINI_API_KEY:
+        print("🟡 Gemini 실패/한도 감지 → OpenRouter 자동 전환")
+    else:
+        print("🟡 GEMINI_API_KEY 없음 → OpenRouter 사용")
 
     openrouter_error = None
 

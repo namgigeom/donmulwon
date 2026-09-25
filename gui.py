@@ -1,4 +1,4 @@
-import os, sys, io, contextlib, traceback, html, time, re
+import os, sys, io, contextlib, traceback, html, time, re, json
 from datetime import datetime
 from math import sin
 from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt, QRect, QTimer
@@ -52,8 +52,24 @@ class PixelOffice(QWidget):
     # Five compact stations. The old 175px desks made the office look like one long counter.
     DESKS=[('현무',55,244,145),('김선달',335,244,145),('이묵',615,244,145),('너부리',895,244,145),('알프레도',1175,244,145)]
     ROLE={'김선달':'FUNDAMENTALS + NEWS','이묵':'TECHNICAL','너부리':'PORTFOLIO','현무':'MACRO','알프레도':'FINAL VERIFIER'}
-    PORTFOLIO=[('VOO','51.9%','$702.56'),('JEPQ','13.0%','$59.78'),('TTWO','24.0%','$215.47'),('JOBY','5.6%','$6.39'),('ALAB','5.5%','$291.22')]
-    def __init__(self): super().__init__(); self.background=PixelBackground(); self.characters=CharacterLayer(); self.setMinimumHeight(560); self.active_ticker='MARKET'
+    PORTFOLIO=[]
+    def __init__(self): super().__init__(); self.background=PixelBackground(); self.characters=CharacterLayer(); self.setMinimumHeight(560); self.active_ticker='MARKET'; self.refresh_portfolio()
+    def refresh_portfolio(self):
+        path=os.path.join(BASE_DIR,"ai_portfolio.json")
+        try:
+            with open(path,"r",encoding="utf-8") as f:
+                data=json.load(f)
+            stocks=data.get("stocks",[])
+            portfolio=[]
+            for stock in stocks:
+                symbol=str(stock.get("symbol","?"))
+                weight=float(stock.get("portfolio_weight",0) or 0)*100
+                value=float(stock.get("market_value",0) or 0)
+                portfolio.append((symbol,f"{weight:.1f}%",f"${value:,.2f}"))
+            self.PORTFOLIO=portfolio[:5]
+        except Exception:
+            self.PORTFOLIO=[]
+        self.update()
     def set_weather(self,v): self.background.set_weather(v); self.update()
     def auto_time(self):
         now=datetime.now(); self.background.set_clock(now); h=self.background.hour; self.characters.set_office_hours(h,immediate=True)
@@ -147,17 +163,15 @@ class MainWindow(QMainWindow):
         self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(self.on_output); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(self.analysis_done); self.thread.start()
 
     def on_output(self,text):
-        self.progress.setValue(82); self.meeting.set_status('⚔ 4인 분석 완료 · 알프레도 최종 검증 준비','현무 · 김선달 · 이묵 · 너부리 의견을 취합했습니다. 잠시 후 알프레도가 결론을 발표합니다.')
+        self.progress.setValue(82); self.office.refresh_portfolio(); self.meeting.set_status('⚔ 4인 분석 완료 · 알프레도 최종 검증 준비','현무 · 김선달 · 이묵 · 너부리 의견을 취합했습니다. 잠시 후 알프레도가 결론을 발표합니다.')
         log=text.split('[MEETING_LOG]',1)[1] if '[MEETING_LOG]' in text else ''
         self.office.characters.set_meeting_log(log)
         self.office.characters.set_meeting_stage('verdict')
         self.office.update()
-        self._pending_result=text
-        QTimer.singleShot(6500,self._show_result_after_verdict)
+        self._show_result_after_verdict(text)
 
-    def _show_result_after_verdict(self):
-        if getattr(self,'_pending_result',None):
-            self.progress.setValue(100); self.result.show_result(self._pending_result); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self._pending_result=None; self.office.update()
+    def _show_result_after_verdict(self,text):
+        self.progress.setValue(100); self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self.office.characters.show_final_verdict(); self.office.update()
 
     def on_failed(self,err):
         self.progress.setValue(100); self.meeting.set_status('❌ 분석 실패','오류가 발생했습니다. 상세 내용은 아래 최종 결과 영역에서 확인할 수 있습니다.'); self.result.show_result('분석 실패\n\n'+err); self.office.characters.show_final_verdict(error=True); self.office.update()
