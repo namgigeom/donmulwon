@@ -139,6 +139,26 @@ def run_meeting(parsed,modules,account_data):
     set_gui_state("return")
     return final_data
 
+def build_ai_portfolio_snapshot(account_data):
+    """Convert one Toss API response into the normalized portfolio contract used by AI/GUI modules."""
+    try:
+        from portfolio_data import build_wallet, build_stocks
+        holdings = account_data.get("holdings", {})
+        cash = account_data.get("cash", {})
+        usd_result = cash.get("USD", {}).get("result", {})
+        krw_result = cash.get("KRW", {}).get("result", {})
+        usd_cash = float(usd_result.get("cashBuyingPower", 0) or 0)
+        krw_cash = float(krw_result.get("cashBuyingPower", 0) or 0)
+        return {
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "wallet": build_wallet(holdings, usd_cash, krw_cash),
+            "stocks": build_stocks(holdings),
+        }
+    except Exception as exc:
+        print(f"⚠️ 포트폴리오 정규화 실패: {type(exc).__name__}: {exc}")
+        return {"generated_at": datetime.now().isoformat(timespec="seconds"), "wallet": {}, "stocks": [], "raw_account_data": account_data}
+
+
 def run_analysis(question):
     question=(question or "").strip()
     if not question:raise ValueError("분석 질문이 비어 있습니다.")
