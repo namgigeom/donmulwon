@@ -2,17 +2,25 @@ import os
 import requests
 from dotenv import load_dotenv
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_FILE = os.path.join(BASE_DIR, ".env")
 
 # ============================================================
 # 1. 환경변수
 # ============================================================
 
-load_dotenv()
+load_dotenv(ENV_FILE)
 
 CLIENT_ID = os.getenv("TOSS_CLIENT_ID")
 CLIENT_SECRET = os.getenv("TOSS_CLIENT_SECRET")
 
 BASE_URL = "https://openapi.tossinvest.com"
+REQUEST_TIMEOUT = 15
+
+
+def _require_credentials():
+    if not CLIENT_ID or not CLIENT_SECRET:
+        raise RuntimeError("TOSS_CLIENT_ID / TOSS_CLIENT_SECRET가 .env에 설정되지 않았습니다.")
 
 
 # ============================================================
@@ -21,6 +29,7 @@ BASE_URL = "https://openapi.tossinvest.com"
 
 def get_access_token():
 
+    _require_credentials()
     url = f"{BASE_URL}/oauth2/token"
 
     data = {
@@ -55,7 +64,8 @@ def get_accounts(token):
 
     response = requests.get(
         url,
-        headers=headers
+        headers=headers,
+        timeout=REQUEST_TIMEOUT
     )
 
     response.raise_for_status()
@@ -114,7 +124,8 @@ def get_buying_power(
     response = requests.get(
         url,
         headers=headers,
-        params=params
+        params=params,
+        timeout=REQUEST_TIMEOUT
     )
 
     response.raise_for_status()
