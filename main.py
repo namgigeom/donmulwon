@@ -135,7 +135,7 @@ def run_meeting(parsed,modules,account_data):
             ("\\n\\n팀별 최종 입장:\\n"+positions if positions else "")
         )
     final_data={**package,"alfredo":alfredo_text}; final_path=save_meeting_file("final_meeting",final_data)
-    print("\n"+"━"*70); print("🐱 알프레도 최종 판단"); print("━"*70); print(normalize_result(cat_result) if cat_result else "❌ 최종 판단을 생성하지 못했습니다."); print("━"*70); print(f"💾 최종 회의록: {final_path}")
+    print("\n"+"━"*70); print("🐱 알프레도 최종 판단"); print("━"*70); print(alfredo_text); print("━"*70); print(f"💾 최종 회의록: {final_path}")
     set_gui_state("return")
     return final_data
 
