@@ -7,12 +7,14 @@ from dotenv import load_dotenv
 # 환경변수
 # ============================================================
 
-load_dotenv()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 CLIENT_ID = os.getenv("TOSS_CLIENT_ID")
 CLIENT_SECRET = os.getenv("TOSS_CLIENT_SECRET")
 
 BASE_URL = "https://openapi.tossinvest.com"
+REQUEST_TIMEOUT = 15
 
 
 # ============================================================
@@ -49,7 +51,8 @@ def get_accounts(token):
 
     response = requests.get(
         url,
-        headers=headers
+        headers=headers,
+        timeout=REQUEST_TIMEOUT
     )
 
     response.raise_for_status()
@@ -92,7 +95,8 @@ def get_buying_power(token, account_seq, currency):
     response = requests.get(
         url,
         headers=headers,
-        params=params
+        params=params,
+        timeout=REQUEST_TIMEOUT
     )
 
     response.raise_for_status()
