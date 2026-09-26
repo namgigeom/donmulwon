@@ -164,7 +164,7 @@ def run_analysis(question):
     if not question:raise ValueError("분석 질문이 비어 있습니다.")
     # Immediately call the team into the office, even outside normal office hours.
     set_gui_state("summon")
-    modules=load_ai_modules(); parsed=parse_question(question); show_request(parsed); account_data=get_account_data(); save_json(AI_PORTFOLIO_FILE,account_data)
+    modules=load_ai_modules(); parsed=parse_question(question); show_request(parsed); account_data=get_account_data(); save_json(AI_PORTFOLIO_FILE,build_ai_portfolio_snapshot(account_data))
     try:return run_meeting(parsed,modules,account_data)
     except Exception:
         set_gui_state("return"); raise
