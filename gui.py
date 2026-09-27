@@ -175,12 +175,23 @@ class MainWindow(QMainWindow):
         self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(self.on_output); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(self.analysis_done); self.thread.start()
 
     def on_output(self,text):
-        self.progress.setValue(82); self.office.refresh_portfolio(); self.meeting.set_status('⚔ 4인 분석 완료 · 알프레도 최종 검증 준비','현무 · 김선달 · 이묵 · 너부리 의견을 취합했습니다. 잠시 후 알프레도가 결론을 발표합니다.')
-        log=text.split('[MEETING_LOG]',1)[1] if '[MEETING_LOG]' in text else ''
-        self.office.characters.set_meeting_log(log)
-        self.office.characters.set_meeting_stage('verdict')
+        self.office.refresh_portfolio()
+        if '[FINAL_RESULT]' in text:
+            final=text.split('[FINAL_RESULT]',1)[1]
+            answer=final.split('[MEETING_LOG]',1)[0].strip()
+            log=final.split('[MEETING_LOG]',1)[1] if '[MEETING_LOG]' in final else ''
+            self.progress.setValue(100)
+            self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.')
+            self.office.characters.set_meeting_log(log[-16000:])
+            self.office.characters.set_meeting_stage('verdict')
+            self._show_result_after_verdict(answer)
+        else:
+            clean=text.strip()
+            if clean:
+                self.status.setText('⚔️ '+clean[-180:])
+                self.meeting.set_status('⚔️ AI TRADING TEAM 회의 진행 중',clean[-180:])
+                self.progress.setValue(min(95, max(8, self.progress.value()+1)))
         self.office.update()
-        self._show_result_after_verdict(text)
 
     def _show_result_after_verdict(self,text):
         self.progress.setValue(100); self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self.office.characters.show_final_verdict(); self.office.update()
