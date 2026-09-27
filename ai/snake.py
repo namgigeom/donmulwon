@@ -99,6 +99,8 @@ def get_market_data(ticker):
             interval="1d",
             auto_adjust=False,
             progress=False,
+        ),
+            timeout=10
         )
 
     except Exception as e:
