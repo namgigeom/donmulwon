@@ -158,7 +158,9 @@ def get_market_data():
                 interval="1d",
                 auto_adjust=False,
                 progress=False
-            )
+            ),
+            timeout=10
+        )
 
             if data.empty:
 
@@ -263,7 +265,9 @@ def get_market_trends():
                 interval="1d",
                 auto_adjust=False,
                 progress=False
-            )
+            ),
+            timeout=10
+        )
 
             if data.empty:
 
@@ -397,6 +401,8 @@ def get_stock_context(ticker):
             interval="1d",
             auto_adjust=False,
             progress=False
+        ),
+            timeout=10
         )
 
         if data.empty:
