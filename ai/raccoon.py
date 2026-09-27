@@ -175,7 +175,9 @@ def get_market_context():
                 interval="1d",
                 auto_adjust=False,
                 progress=False
-            )
+            ),
+            timeout=10
+        )
 
             if data.empty:
                 continue
@@ -247,6 +249,8 @@ def get_stock_data(
             interval="1d",
             auto_adjust=False,
             progress=False
+        ),
+            timeout=10
         )
 
         if data.empty:
