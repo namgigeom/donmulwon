@@ -17,15 +17,27 @@ class AnalysisWorker(QObject):
     def run(self):
         try:
             import main
-            buf=io.StringIO()
-            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            class LiveStream(io.StringIO):
+                def __init__(self, emit):
+                    super().__init__()
+                    self.emit = emit
+                def write(self, s):
+                    if s:
+                        super().write(s)
+                        self.emit(s.rstrip())
+                    return len(s)
+                def flush(self):
+                    pass
+
+            live = LiveStream(self.output.emit)
+            with contextlib.redirect_stdout(live), contextlib.redirect_stderr(live):
                 result=main.run_analysis(self.question)
-            log=buf.getvalue().strip()
+            log=live.getvalue().strip()
             answer=''
             if isinstance(result,dict): answer=str(result.get('alfredo','') or result.get('final','') or '').strip()
             else: answer=str(result or '').strip()
             if not answer: answer='알프레도의 최종 판단이 생성되지 않았습니다.'
-            self.output.emit(answer+'\n\n[MEETING_LOG]\n'+log[-16000:])
+            self.output.emit('[FINAL_RESULT]\n'+answer+'\n\n[MEETING_LOG]\n'+log[-16000:])
         except Exception:
             self.failed.emit(traceback.format_exc())
         finally:
