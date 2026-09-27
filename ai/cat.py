@@ -341,16 +341,15 @@ def analyze(
         "portfolio_file":
             portfolio_file_data,
 
-        "market_data":
-            market,
+        # legacy market_data.json은 이번 회의의 기술지표 원본이 아니다.
+        # 기술적 판단은 아래 snake의 live RAW_TECHNICAL_EVIDENCE를 우선한다.
+        "legacy_market_data": market,
 
-        "news_data":
-            news,
+        "news_data": news,
 
+        # 이번 회의에서 실제로 수집된 MA/RSI/MACD/ATR/OHLCV 증거
+        "technical_evidence": team["snake"]["content"],
 
-        # ====================================================
-        # 4명 AI 분석
-        # ====================================================
 
         "team_analyses": {
 
