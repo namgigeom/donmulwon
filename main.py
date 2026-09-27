@@ -80,7 +80,21 @@ def get_account_data():
 def run_meeting(parsed,modules,account_data):
     from ai.batch_engine import run_team_batches
     from ai.data_cache import clear as clear_data_cache
-    clear_data_cache(); tickers=parsed.get("tickers",[])
+    clear_data_cache()
+    tickers = list(dict.fromkeys(parsed.get("tickers", []) or []))
+    if not tickers:
+        try:
+            holding_items = account_data.get("holdings", {}).get("result", {}).get("items", [])
+            account_tickers = [
+                str(item.get("symbol") or "").upper().strip()
+                for item in holding_items
+                if item.get("symbol")
+            ]
+            tickers = list(dict.fromkeys(account_tickers))
+            if tickers:
+                print("📋 전체 계좌 분석이므로 보유종목을 자동 분석 대상으로 포함:", ", ".join(tickers))
+        except Exception as exc:
+            print(f"⚠️ 보유종목 목록 추출 실패: {type(exc).__name__}: {exc}")
     print("\n"+"="*70); print("⚔️ AI TRADING TEAM 회의"); print("="*70); print("🎯 분석 대상:",", ".join(tickers) if tickers else "전체 시장 / 포트폴리오"); print("⚡ 4명 독립 분석: 역할별 1회 호출 + 병렬 실행")
     started=time.time()
     team_results=run_team_batches(modules,tickers,account_data,max_workers=4)
