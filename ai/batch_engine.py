@@ -81,6 +81,9 @@ def _collect_role_data(module, role, tickers, account_data):
     if role == "snake":
         # 이묵은 기존 요약 collector가 아니라 실제 OHLCV/지표 전용 피드를 사용한다.
         stocks = _parallel_map(tickers, lambda t: _cached_call("snake.technical_feed.v2", t, technical_feed.get_market_data, t))
+        ok = [t for t, v in stocks.items() if isinstance(v, dict) and v.get("status") == "OK"]
+        failed = {t: (v.get("error") if isinstance(v, dict) else "invalid result") for t, v in stocks.items() if not (isinstance(v, dict) and v.get("status") == "OK")}
+        print(f"📊 이묵 기술데이터: OK {len(ok)}/{len(stocks)}" + (f" | 실패: {failed}" if failed else ""))
         return {
             "role": role,
             "requested_tickers": tickers,
