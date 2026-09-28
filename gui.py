@@ -65,7 +65,7 @@ class PixelOffice(QWidget):
     DESKS=[('현무',55,244,145),('김선달',335,244,145),('이묵',615,244,145),('너부리',895,244,145),('알프레도',1175,244,145)]
     ROLE={'김선달':'FUNDAMENTALS + NEWS','이묵':'TECHNICAL','너부리':'PORTFOLIO','현무':'MACRO','알프레도':'FINAL VERIFIER'}
     PORTFOLIO=[]
-    def __init__(self): super().__init__(); self.background=PixelBackground(); self.characters=CharacterLayer(); self.setMinimumHeight(560); self.active_ticker='MARKET'; self.refresh_portfolio()
+    def __init__(self): super().__init__(); self.background=PixelBackground(); self.characters=CharacterLayer(); self.setMinimumHeight(560); self.active_ticker='MARKET'; self.market_rows=[]; self.refresh_portfolio()
     def refresh_portfolio(self):
         path=os.path.join(BASE_DIR,"ai_portfolio.json")
         try:
@@ -78,7 +78,8 @@ class PixelOffice(QWidget):
                 weight=float(stock.get("portfolio_weight",0) or 0)*100
                 value=float(stock.get("market_value",0) or 0)
                 portfolio.append((symbol,f"{weight:.1f}%",f"${value:,.2f}"))
-            self.PORTFOLIO=portfolio[:5]
+            self.PORTFOLIO=portfolio[:10]
+            self.market_rows=[(str(s.get('symbol','?')), str(s.get('change_percent',s.get('change','-')))) for s in stocks[:10]]
         except Exception:
             self.PORTFOLIO=[]
         self.update()
@@ -138,31 +139,29 @@ class PixelOffice(QWidget):
             for a,b in zip(pts,pts[1:]): p.drawLine(*a,*b)
             p.setPen(Qt.NoPen); self.rect(p,x+10,y+12,20,3,'#a0744d'); self.rect(p,x+dw-34,y+12,24,3,'#5e3f2c'); self.rect(p,x+dw//2-28,y+43,56,5,'#303033'); self.rect(p,x+dw-25,y+40,10,8,'#4e6652'); self.rect(p,x+8,y+40,54,9,'#3a2b23'); self.text(p,x+9,y+43,58,11,name,6,'#e1cb91',Qt.AlignCenter); self.text(p,x,y+72,dw,17,self.ROLE[name],5,'#9f927d',Qt.AlignCenter)
     def draw_account(self,p,w):
-        x=w-205; y=55; ww=175; hh=140
+        x=w-205; y=55; ww=175; hh=175
         self.rect(p,x,y,ww,hh,'#252a2c'); self.rect(p,x+5,y+5,ww-10,hh-10,'#172024')
-        self.text(p,x+12,y+10,150,18,'ACCOUNT',8,'#d8c48e')
-        self.text(p,x+12,y+28,150,14,'LIVE HOLDINGS',5,'#8fa69a')
-        yy=y+48
-        for t,wt,val in self.PORTFOLIO:
-            self.text(p,x+10,yy,45,14,t,5,'#eee4d2')
-            self.text(p,x+57,yy,42,14,wt,5,'#cdb985',Qt.AlignRight)
-            self.text(p,x+101,yy,62,14,val,5,'#aebbb2',Qt.AlignRight)
-            yy+=18
+        self.text(p,x+10,y+7,155,16,'ACCOUNT',7,'#d8c48e')
+        self.text(p,x+10,y+23,155,12,'LIVE HOLDINGS · WEIGHT',4,'#8fa69a')
+        yy=y+40
+        for t,wt,val in self.PORTFOLIO[:10]:
+            self.text(p,x+8,yy,42,12,t,4,'#eee4d2')
+            self.text(p,x+52,yy,42,12,wt,4,'#cdb985',Qt.AlignRight)
+            self.text(p,x+96,yy,70,12,val,4,'#aebbb2',Qt.AlignRight)
+            yy+=13
 
     def draw_market(self,p,w):
-        # ACCOUNT와 완전히 독립된 패널. 오른쪽 끝 기준으로 나란히 배치.
-        y=55; ww=175; hh=140
-        account_x=w-205
-        x=account_x-10-ww
+        # 10종목까지 표시하되 책상 영역(y=244)과 겹치지 않는 높이로 고정
+        y=55; ww=175; hh=175; account_x=w-205; x=account_x-10-ww
         self.rect(p,x,y,ww,hh,'#252a2c'); self.rect(p,x+5,y+5,ww-10,hh-10,'#172024')
-        self.text(p,x+12,y+10,150,18,'MARKET BOARD',8,'#d8c48e')
-        self.text(p,x+12,y+29,150,14,self.active_ticker,5,'#8fa69a',Qt.AlignRight)
-        rows=[('VOO','+5.74%'),('JEPQ','+0.00%'),('TTWO','-2.36%'),('JOBY','-9.23%'),('ALAB','-6.82%')]
-        yy=y+49
+        self.text(p,x+10,y+7,155,16,'MARKET BOARD',7,'#d8c48e')
+        self.text(p,x+10,y+23,155,12,'LIVE MARKET',4,'#8fa69a')
+        rows=self.market_rows[:10] if hasattr(self,'market_rows') else []
+        yy=y+40
         for ticker,change in rows:
-            self.text(p,x+10,yy,55,14,ticker,5,'#eee4d2')
-            self.text(p,x+70,yy,92,14,change,5,'#cdb985',Qt.AlignRight)
-            yy+=17
+            self.text(p,x+8,yy,70,12,ticker,4,'#eee4d2')
+            self.text(p,x+80,yy,82,12,change,4,'#cdb985',Qt.AlignRight)
+            yy+=13
 
     def set_ticker(self,t): self.active_ticker=t or 'MARKET'; self.update()
 
