@@ -93,7 +93,7 @@ class PixelOffice(QWidget):
     def paintEvent(self,e):
         p=QPainter(self); p.setRenderHint(QPainter.Antialiasing,False)
         try:
-            w,h=self.width(),self.height(); self.background.paint(p,w,h); self.draw_room(p,w,h); self.draw_window(p,w); self.draw_furniture(p,w,h); self.draw_desks(p); self.draw_market(p,w); self.draw_account(p); self.characters.paint(p)
+            w,h=self.width(),self.height(); self.background.paint(p,w,h); self.draw_room(p,w,h); self.draw_window(p,w); self.draw_furniture(p,w,h); self.draw_desks(p); self.draw_market(p,w); self.draw_account(p,w); self.characters.paint(p)
         finally:
             if p.isActive(): p.end()
     def draw_room(self,p,w,h):
@@ -137,6 +137,18 @@ class PixelOffice(QWidget):
             pts=[(mx+7,y+27),(mx+16,y+23),(mx+25,y+25),(mx+34,y+18),(mx+45,y+22),(mx+54,y+13),(mx+63,y+19)]; p.setPen(QColor('#d4bb76'))
             for a,b in zip(pts,pts[1:]): p.drawLine(*a,*b)
             p.setPen(Qt.NoPen); self.rect(p,x+10,y+12,20,3,'#a0744d'); self.rect(p,x+dw-34,y+12,24,3,'#5e3f2c'); self.rect(p,x+dw//2-28,y+43,56,5,'#303033'); self.rect(p,x+dw-25,y+40,10,8,'#4e6652'); self.rect(p,x+8,y+40,54,9,'#3a2b23'); self.text(p,x+9,y+43,58,11,name,6,'#e1cb91',Qt.AlignCenter); self.text(p,x,y+72,dw,17,self.ROLE[name],5,'#9f927d',Qt.AlignCenter)
+    def draw_account(self,p,w):
+        x=w-205; y=55; ww=175; hh=140
+        self.rect(p,x,y,ww,hh,'#252a2c'); self.rect(p,x+5,y+5,ww-10,hh-10,'#172024')
+        self.text(p,x+12,y+10,150,18,'ACCOUNT',8,'#d8c48e')
+        self.text(p,x+12,y+28,150,14,'LIVE HOLDINGS',5,'#8fa69a')
+        yy=y+48
+        for t,wt,val in self.PORTFOLIO:
+            self.text(p,x+10,yy,45,14,t,5,'#eee4d2')
+            self.text(p,x+57,yy,42,14,wt,5,'#cdb985',Qt.AlignRight)
+            self.text(p,x+101,yy,62,14,val,5,'#aebbb2',Qt.AlignRight)
+            yy+=18
+
     def draw_market(self,p,w):
         # ACCOUNT와 완전히 독립된 패널. 오른쪽 끝 기준으로 나란히 배치.
         y=55; ww=175; hh=140
