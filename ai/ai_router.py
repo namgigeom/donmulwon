@@ -29,7 +29,7 @@ OPENROUTER_MAX_RETRIES = 0
 GEMINI_TIMEOUT_SECONDS = 25
 OPENROUTER_TIMEOUT_SECONDS = 20
 
-_gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+_gemini_client = (genai.Client(api_key=GEMINI_API_KEY, http_options={"timeout": GEMINI_TIMEOUT_SECONDS * 1000}) if GEMINI_API_KEY else None)
 
 
 class AIRouterError(Exception):
@@ -208,6 +208,7 @@ def generate_content(
 
     for attempt in gemini_attempts:
         try:
+            print(f"⏳ Gemini 요청 시작: {model or GEMINI_MODEL} (timeout {GEMINI_TIMEOUT_SECONDS}초)")
             result = _gemini_generate(
                 prompt=prompt,
                 config=config,
@@ -220,6 +221,7 @@ def generate_content(
 
         except Exception as exc:
             gemini_error = exc
+            print(f"⚠️ Gemini 호출 실패/timeout → OpenRouter fallback: {type(exc).__name__}: {exc}")
 
             if attempt < GEMINI_MAX_RETRIES:
                 time.sleep(1)
