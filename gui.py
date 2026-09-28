@@ -138,10 +138,18 @@ class PixelOffice(QWidget):
             for a,b in zip(pts,pts[1:]): p.drawLine(*a,*b)
             p.setPen(Qt.NoPen); self.rect(p,x+10,y+12,20,3,'#a0744d'); self.rect(p,x+dw-34,y+12,24,3,'#5e3f2c'); self.rect(p,x+dw//2-28,y+43,56,5,'#303033'); self.rect(p,x+dw-25,y+40,10,8,'#4e6652'); self.rect(p,x+8,y+40,54,9,'#3a2b23'); self.text(p,x+9,y+43,58,11,name,6,'#e1cb91',Qt.AlignCenter); self.text(p,x,y+72,dw,17,self.ROLE[name],5,'#9f927d',Qt.AlignCenter)
     def draw_market(self,p,w):
-        x=150;y=205;ww=min(610,w-670);self.rect(p,x-4,y-4,ww+8,44,'#30241e');self.rect(p,x,y,ww,36,'#171d20');self.text(p,x+12,y+5,190,15,'MARKET BOARD',7,'#d8c48e');self.text(p,x+205,y+5,ww-220,15,self.active_ticker,7,'#9ab0a8',Qt.AlignRight);self.text(p,x+12,y+20,ww-24,13,'VOO +5.74%   JEPQ +0.00%   TTWO -2.36%   JOBY -9.23%   ALAB -6.82%',5,'#cdb985')
-    def draw_account(self,p):
-        w=self.width(); x=w-205;y=55;ww=175;hh=140;self.rect(p,x,y,ww,hh,'#252a2c');self.rect(p,x+5,y+5,ww-10,hh-10,'#172024');self.text(p,x+12,y+10,150,18,'ACCOUNT',8,'#d8c48e');self.text(p,x+12,y+28,150,14,'LIVE HOLDINGS',5,'#8fa69a');yy=y+48
-        for t,wt,val in self.PORTFOLIO:self.text(p,x+10,yy,45,14,t,5,'#eee4d2');self.text(p,x+57,yy,42,14,wt,5,'#cdb985',Qt.AlignRight);self.text(p,x+101,yy,62,14,val,5,'#aebbb2',Qt.AlignRight);yy+=18
+        # ACCOUNT와 나란히, 같은 높이/비슷한 크기로 배치
+        x=w-405; y=55; ww=190; hh=140
+        self.rect(p,x,y,ww,hh,'#252a2c'); self.rect(p,x+5,y+5,ww-10,hh-10,'#172024')
+        self.text(p,x+12,y+10,ww-24,18,'MARKET BOARD',8,'#d8c48e')
+        self.text(p,x+12,y+28,ww-24,14,self.active_ticker,6,'#9ab0a8',Qt.AlignRight)
+        rows=[('VOO','+5.74%'),('JEPQ','+0.00%'),('TTWO','-2.36%'),('JOBY','-9.23%'),('ALAB','-6.82%')]
+        yy=y+51
+        for ticker,change in rows:
+            self.text(p,x+12,yy,65,14,ticker,6,'#eee4d2')
+            self.text(p,x+82,yy,90,14,change,6,'#cdb985',Qt.AlignRight)
+            yy+=16
+
     def set_ticker(self,t): self.active_ticker=t or 'MARKET'; self.update()
 
 class MainWindow(QMainWindow):
