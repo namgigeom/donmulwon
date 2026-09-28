@@ -135,7 +135,9 @@ def run_role_batch(module, role, tickers, account_data):
     function = getattr(module, function_name, None)
     if not callable(function):
         raise RuntimeError(f"{role}의 {function_name} 함수를 찾지 못했습니다.")
+    print(f"⏳ {ROLE_CONFIG[role]["name"]} 데이터 수집 시작: {", ".join(tickers) if tickers else "MARKET"}")
     data = _collect_role_data(module, role, tickers, account_data)
+    print(f"📦 {ROLE_CONFIG[role]["name"]} 데이터 수집 완료")
     data_text = _json(data)
     ticker_label = ", ".join(tickers) if tickers else "MARKET / PORTFOLIO"
     prompt = _render_prompt(_extract_prompt(function), ticker_label, data_text)
@@ -161,7 +163,9 @@ def run_role_batch(module, role, tickers, account_data):
     router = getattr(module, "ai_router", None)
     if router is None or not hasattr(router, "generate_content"):
         raise RuntimeError(f"{role}의 ai_router를 찾지 못했습니다.")
+    print(f"🤖 {ROLE_CONFIG[role]["name"]} AI 분석 요청 시작")
     response = router.generate_content(model="gemini-3.6-flash", contents=prompt)
+    print(f"🤖 {ROLE_CONFIG[role]["name"]} AI 분석 응답 수신")
     result = getattr(response, "text", str(response))
 
     # 기술 데이터는 LLM의 서술에만 의존하지 않고 최종 검증 단계까지 전달한다.
