@@ -1,16 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
-<defs>
- <filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#000" flood-opacity=".16"/></filter>
-</defs>
-<g filter="url(#s)">
- 
-<path d="M47 58 Q29 46 40 29 Q55 34 61 48" fill="#78b95f"/><path d="M113 58 Q131 46 120 29 Q105 34 99 48" fill="#78b95f"/>
-<ellipse cx="80" cy="72" rx="48" ry="42" fill="#9bd479"/>
-<path d="M54 99 Q36 114 50 127 Q67 140 80 119 Q93 140 110 127 Q124 114 106 99 Q95 88 80 94 Q65 88 54 99Z" fill="#7fbe63"/>
-<ellipse cx="63" cy="67" rx="5" ry="7" fill="#29302a"/><ellipse cx="97" cy="67" rx="5" ry="7" fill="#29302a"/>
-<path d="M71 82 Q80 88 89 82" fill="none" stroke="#46513e" stroke-width="4" stroke-linecap="round"/>
-<ellipse cx="49" cy="81" rx="9" ry="5" fill="#e69b9e" opacity=".6"/><ellipse cx="111" cy="81" rx="9" ry="5" fill="#e69b9e" opacity=".6"/>
-<path d="M70 110 Q80 116 90 110" fill="none" stroke="#4f7942" stroke-width="4" stroke-linecap="round"/>
-
-</g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" shape-rendering="crispEdges"><path fill="#282727" d="M48 24h16v16h8v-8h16v8h8V24h16v16h8v16h8v16h8v32h-8v16h-16v16H56v-16H40v-16h-8V72h8V56h8z"/><path fill="#8fc96b" d="M56 32h8v16h16v-8h16v8h16V32h8v24h8v16h8v16h-8v16h-8v8H96v8H64v-8H48v-16h-8V72h8V56h8z"/><path fill="#b6e28b" d="M56 56h48v8h16v24h-8v16H96v8H64v-8H48V80h8z"/><path fill="#2b2928" d="M64 72h8v8h-8zM96 72h8v8h-8z"/><path fill="#e99c9d" d="M48 80h8v8h-8zM104 80h8v8h-8z"/><path fill="#4f7041" d="M72 88h16v8H80v8h-8v-8h8v-8z"/><path fill="#78ad59" d="M56 104h48v16H96v8H64v-8H56z"/></svg>
