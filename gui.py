@@ -188,8 +188,24 @@ class MainWindow(QMainWindow):
         else:
             clean=text.strip()
             if clean:
-                self.status.setText('⚔️ '+clean[-180:])
-                self.meeting.set_status('⚔️ AI TRADING TEAM 회의 진행 중',clean[-180:])
+                line=clean.splitlines()[-1].strip()
+                stage='회의 진행 중'
+                detail=line
+                role_map={'🐦 김선달':'🐦 김선달','🐍 이묵':'🐍 이묵','🦝 너부리':'🦝 너부리','🐢 현무':'🐢 현무'}
+                for key,label in role_map.items():
+                    if key in line:
+                        if '데이터 수집 시작' in line: stage=f'{label} · 데이터 수집 중'
+                        elif '데이터 수집 완료' in line: stage=f'{label} · AI 분석 준비'
+                        elif 'AI 분석 요청 시작' in line: stage=f'{label} · AI 분석 중...'
+                        elif 'AI 분석 응답 수신' in line: stage=f'{label} · 분석 정리 중'
+                        elif '통합 분석 완료' in line: stage=f'{label} · 통합 분석 완료'
+                        else: stage=f'{label} · 작업 중...'
+                        break
+                if 'OpenRouter' in line: stage='🌐 OpenRouter · 응답 대기 중'
+                elif 'Gemini' in line: stage='🤖 Gemini · 응답 대기 중'
+                elif '알프레도' in line: stage='🐱 알프레도 · 최종 검증 중'
+                self.status.setText(f'⚔️ {stage}')
+                self.meeting.set_status(f'⚔️ AI TRADING TEAM · {stage}',detail[-220:])
                 self.progress.setValue(min(95, max(8, self.progress.value()+1)))
         self.office.update()
 
