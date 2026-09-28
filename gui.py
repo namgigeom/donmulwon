@@ -138,17 +138,19 @@ class PixelOffice(QWidget):
             for a,b in zip(pts,pts[1:]): p.drawLine(*a,*b)
             p.setPen(Qt.NoPen); self.rect(p,x+10,y+12,20,3,'#a0744d'); self.rect(p,x+dw-34,y+12,24,3,'#5e3f2c'); self.rect(p,x+dw//2-28,y+43,56,5,'#303033'); self.rect(p,x+dw-25,y+40,10,8,'#4e6652'); self.rect(p,x+8,y+40,54,9,'#3a2b23'); self.text(p,x+9,y+43,58,11,name,6,'#e1cb91',Qt.AlignCenter); self.text(p,x,y+72,dw,17,self.ROLE[name],5,'#9f927d',Qt.AlignCenter)
     def draw_market(self,p,w):
-        # ACCOUNT 바로 왼쪽에 MARKET BOARD를 배치
-        account_x=w-205; y=55; gap=10; ww=175; hh=140
-        x=account_x-gap-ww
+        # ACCOUNT와 완전히 독립된 패널. 오른쪽 끝 기준으로 나란히 배치.
+        y=55; ww=175; hh=140
+        account_x=w-205
+        x=account_x-10-ww
         self.rect(p,x,y,ww,hh,'#252a2c'); self.rect(p,x+5,y+5,ww-10,hh-10,'#172024')
-        self.text(p,x+12,y+10,ww-24,18,'MARKET BOARD',8,'#d8c48e')
-        self.text(p,x+12,y+28,ww-24,14,self.active_ticker,6,'#9ab0a8',Qt.AlignRight)
+        self.text(p,x+12,y+10,150,18,'MARKET BOARD',8,'#d8c48e')
+        self.text(p,x+12,y+29,150,14,self.active_ticker,5,'#8fa69a',Qt.AlignRight)
         rows=[('VOO','+5.74%'),('JEPQ','+0.00%'),('TTWO','-2.36%'),('JOBY','-9.23%'),('ALAB','-6.82%')]
-        yy=y+51
+        yy=y+49
         for ticker,change in rows:
-            self.text(p,x+10,yy,60,14,ticker,6,'#eee4d2')
-            self.text(p,x+75,yy,88,14,change,6,'#cdb985',Qt.AlignRight)
+            self.text(p,x+10,yy,55,14,ticker,5,'#eee4d2')
+            self.text(p,x+70,yy,92,14,change,5,'#cdb985',Qt.AlignRight)
+            yy+=17
 
     def set_ticker(self,t): self.active_ticker=t or 'MARKET'; self.update()
 
