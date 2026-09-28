@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 
 import yfinance as yf
+from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 from ai import ai_router
 
@@ -128,114 +129,33 @@ def safe_float(value):
 # 시장 데이터 가져오기
 # ============================================================
 
+def _download(ticker, period="6mo"):
+    try:
+        return yf.download(ticker, period=period, interval="1d", auto_adjust=False, progress=False, timeout=10, threads=False)
+    except Exception as exc:
+        return exc
+
+
 def get_market_data():
+    tickers = {"S&P500": "^GSPC", "NASDAQ": "^IXIC", "DOW": "^DJI", "VIX": "^VIX", "US10Y": "^TNX", "DXY": "DX-Y.NYB"}
 
-    tickers = {
-
-        "S&P500": "^GSPC",
-
-        "NASDAQ": "^IXIC",
-
-        "DOW": "^DJI",
-
-        "VIX": "^VIX",
-
-        "US10Y": "^TNX",
-
-        "DXY": "DX-Y.NYB"
-
-    }
-
-    market_data = {}
-
-    for name, ticker in tickers.items():
-
+    def fetch(item):
+        name, ticker = item
+        data = _download(ticker)
+        if isinstance(data, Exception) or data is None or data.empty:
+            return name, {"ticker": ticker, "error": str(data) if isinstance(data, Exception) else "데이터 없음"}
         try:
+            close = data["Close"]
+            if hasattr(close, "columns"):
+                close = close.iloc[:, 0]
+            current = float(close.iloc[-1])
+            previous = float(close.iloc[-2]) if len(close) >= 2 else None
+            return name, {"ticker": ticker, "price": current, "daily_change_percent": ((current - previous) / previous * 100) if previous else None}
+        except Exception as exc:
+            return name, {"ticker": ticker, "error": str(exc)}
 
-            data = yf.download(
-                ticker,
-                period="6mo",
-                interval="1d",
-                auto_adjust=False,
-                progress=False,
-                timeout=10
-            )
-
-            if data.empty:
-
-                market_data[name] = {
-                    "ticker": ticker,
-                    "error": "데이터 없음"
-                }
-
-                continue
-
-            latest = data.iloc[-1]
-
-            close = latest["Close"]
-
-            if hasattr(close, "iloc"):
-
-                close = close.iloc[0]
-
-            close = float(close)
-
-            if len(data) >= 2:
-
-                previous = data.iloc[-2]
-
-                previous_close = previous["Close"]
-
-                if hasattr(
-                    previous_close,
-                    "iloc"
-                ):
-
-                    previous_close = (
-                        previous_close.iloc[0]
-                    )
-
-                previous_close = float(
-                    previous_close
-                )
-
-                change_percent = (
-
-                    (
-                        close
-                        - previous_close
-                    )
-                    / previous_close
-                    * 100
-
-                )
-
-            else:
-
-                change_percent = None
-
-            market_data[name] = {
-
-                "ticker": ticker,
-
-                "price": close,
-
-                "daily_change_percent":
-                    change_percent
-
-            }
-
-        except Exception as e:
-
-            market_data[name] = {
-
-                "ticker": ticker,
-
-                "error": str(e)
-
-            }
-
-    return market_data
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        return dict(executor.map(fetch, tickers.items()))
 
 
 # ============================================================
@@ -243,116 +163,31 @@ def get_market_data():
 # ============================================================
 
 def get_market_trends():
+    tickers = {"S&P500": "^GSPC", "NASDAQ": "^IXIC"}
 
-    tickers = {
-
-        "S&P500": "^GSPC",
-
-        "NASDAQ": "^IXIC"
-
-    }
-
-    trends = {}
-
-    for name, ticker in tickers.items():
-
+    def fetch(item):
+        name, ticker = item
+        data = _download(ticker)
+        if isinstance(data, Exception) or data is None or data.empty:
+            return name, {"error": str(data) if isinstance(data, Exception) else "데이터 없음"}
         try:
-
-            data = yf.download(
-                ticker,
-                period="6mo",
-                interval="1d",
-                auto_adjust=False,
-                progress=False,
-                timeout=10
-            )
-
-            if data.empty:
-
-                trends[name] = {
-
-                    "error": "데이터 없음"
-
-                }
-
-                continue
-
             close = data["Close"]
-
             if hasattr(close, "columns"):
-
                 close = close.iloc[:, 0]
+            current = float(close.iloc[-1])
+            ma20 = float(close.rolling(20).mean().iloc[-1])
+            ma50 = float(close.rolling(50).mean().iloc[-1])
+            trend = "상승 추세" if current > ma20 > ma50 else "하락 추세" if current < ma20 < ma50 else "혼조 / 횡보"
+            return name, {"current": current, "MA20": ma20, "MA50": ma50, "trend": trend}
+        except Exception as exc:
+            return name, {"error": str(exc)}
 
-            ma20 = (
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        return dict(executor.map(fetch, tickers.items()))
 
-                close
-                .rolling(20)
-                .mean()
-                .iloc[-1]
-
-            )
-
-            ma50 = (
-
-                close
-                .rolling(50)
-                .mean()
-                .iloc[-1]
-
-            )
-
-            current = close.iloc[-1]
-
-            current = float(current)
-            ma20 = float(ma20)
-            ma50 = float(ma50)
-
-            if (
-                current > ma20
-                and ma20 > ma50
-            ):
-
-                trend = "상승 추세"
-
-            elif (
-                current < ma20
-                and ma20 < ma50
-            ):
-
-                trend = "하락 추세"
-
-            else:
-
-                trend = "혼조 / 횡보"
-
-            trends[name] = {
-
-                "current": current,
-
-                "MA20": ma20,
-
-                "MA50": ma50,
-
-                "trend": trend
-
-            }
-
-        except Exception as e:
-
-            trends[name] = {
-
-                "error": str(e)
-
-            }
-
-    return trends
-
-
-# ============================================================
-# 특정 종목 시장환경 분석
-# ============================================================
 
 def get_stock_context(ticker):
+
 
     # ========================================================
     # ticker가 없는 경우
