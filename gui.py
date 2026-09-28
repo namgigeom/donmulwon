@@ -141,26 +141,26 @@ class PixelOffice(QWidget):
     def draw_account(self,p,w):
         x=w-205; y=55; ww=175; hh=175
         self.rect(p,x,y,ww,hh,'#252a2c'); self.rect(p,x+5,y+5,ww-10,hh-10,'#172024')
-        self.text(p,x+10,y+7,155,16,'ACCOUNT',7,'#d8c48e')
-        self.text(p,x+10,y+23,155,12,'LIVE HOLDINGS · WEIGHT',4,'#8fa69a')
+        self.text(p,x+10,y+7,155,16,'ACCOUNT',8,'#d8c48e')
+        self.text(p,x+10,y+23,155,12,'LIVE HOLDINGS · WEIGHT',5,'#aebbb2')
         yy=y+40
         for t,wt,val in self.PORTFOLIO[:10]:
-            self.text(p,x+8,yy,42,12,t,4,'#eee4d2')
-            self.text(p,x+52,yy,42,12,wt,4,'#cdb985',Qt.AlignRight)
-            self.text(p,x+96,yy,70,12,val,4,'#aebbb2',Qt.AlignRight)
+            self.text(p,x+8,yy,42,12,t,6,'#eee4d2')
+            self.text(p,x+52,yy,42,12,wt,6,'#d6c38f',Qt.AlignRight)
+            self.text(p,x+96,yy,70,12,val,6,'#d2d9d5',Qt.AlignRight)
             yy+=13
 
     def draw_market(self,p,w):
         # 10종목까지 표시하되 책상 영역(y=244)과 겹치지 않는 높이로 고정
         y=55; ww=175; hh=175; account_x=w-205; x=account_x-10-ww
         self.rect(p,x,y,ww,hh,'#252a2c'); self.rect(p,x+5,y+5,ww-10,hh-10,'#172024')
-        self.text(p,x+10,y+7,155,16,'MARKET BOARD',7,'#d8c48e')
-        self.text(p,x+10,y+23,155,12,'LIVE MARKET',4,'#8fa69a')
+        self.text(p,x+10,y+7,155,16,'MARKET BOARD',8,'#d8c48e')
+        self.text(p,x+10,y+23,155,12,'LIVE MARKET',5,'#aebbb2')
         rows=self.market_rows[:10] if hasattr(self,'market_rows') else []
         yy=y+40
         for ticker,change in rows:
-            self.text(p,x+8,yy,70,12,ticker,4,'#eee4d2')
-            self.text(p,x+80,yy,82,12,change,4,'#cdb985',Qt.AlignRight)
+            self.text(p,x+8,yy,70,12,ticker,6,'#eee4d2')
+            self.text(p,x+80,yy,82,12,change,6,'#d6c38f',Qt.AlignRight)
             yy+=13
 
     def set_ticker(self,t): self.active_ticker=t or 'MARKET'; self.update()
