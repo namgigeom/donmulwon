@@ -39,8 +39,8 @@ def build_debate_prompt(question, parsed, account_data, team_results):
     for key, name in AI_NAMES.items():
         result = normalize_result(team_results.get(key, ""))
         # 비정상적으로 긴 로그가 토론 입력을 폭증시키는 것을 방지한다.
-        if len(result) > 12000:
-            result = result[:12000] + "\n[분석 후반부 생략]"
+        if len(result) > 6000:
+            result = result[:6000] + "\n[분석 후반부 생략]"
         formatted_team.append(f"[{name}]\n{result}")
 
     team_text = "\n\n".join(formatted_team)
@@ -120,7 +120,7 @@ def run_debate(modules, parsed, account_data, team_results):
         # 토론은 사고의 질을 유지하면서 불필요하게 긴 출력은 제한한다.
         config = types.GenerateContentConfig(
             temperature=0.2,
-            max_output_tokens=900,
+            max_output_tokens=600,
             response_mime_type="application/json",
         )
         result = ai_router.generate_content(
