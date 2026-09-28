@@ -55,7 +55,7 @@ class ResultPanel(QTextBrowser):
 
 class MeetingLogPanel(QTextBrowser):
     def __init__(self):
-        super().__init__(); self.setReadOnly(True); self.setMaximumHeight(155)
+        super().__init__(); self.setReadOnly(True); self.setFixedHeight(82)
         self.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:8px;color:#bfb6a6;}')
     def set_status(self,title,detail):
         self.setHtml(f'<div style="font-family:Malgun Gothic;color:#eee4d2"><b>{html.escape(title)}</b><br><span style="color:#a49a8b">{html.escape(detail)}</span></div>')
@@ -155,7 +155,7 @@ class MainWindow(QMainWindow):
         self.status=QLabel('대기 중 · 실제 시각 기준 사무실 상태 유지'); layout.addWidget(self.status)
         self.progress=QProgressBar(); self.progress.setRange(0,100); self.progress.setValue(0); self.progress.hide(); layout.addWidget(self.progress)
         self.meeting=MeetingLogPanel(); self.meeting.set_status('대기 중','분석을 시작하면 전원이 출입문에서 회의실로 이동합니다.'); layout.addWidget(self.meeting)
-        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setMaximumHeight(105); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:7px;color:#bfb6a6;}'); layout.addWidget(self.team_status)
+        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setMinimumHeight(145); self.team_status.setMaximumHeight(170); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:7px;color:#bfb6a6;}'); layout.addWidget(self.team_status)
         self._reset_team_status()
         self.result=ResultPanel(); self.result.show_waiting(); layout.addWidget(self.result)
         self.setCentralWidget(root); self.thread=None; self.worker=None; self.meeting_started_at=0.0
@@ -171,7 +171,7 @@ class MainWindow(QMainWindow):
         cells=[]
         for name in roles:
             cells.append(f'<div style="display:inline-block;width:18%;padding:4px"><b>{icons[name]} {name}</b><br><span style="color:#c8a866">{html.escape(self.team_states[name])}</span></div>')
-        self.team_status.setHtml('<div style="font-family:Malgun Gothic;font-size:9pt">'+''.join(cells)+'</div>')
+        self.team_status.setHtml('<div style="font-family:Malgun Gothic;font-size:11pt">'+''.join(cells)+'</div>')
 
     def _set_team_state(self,name,state):
         if name in self.team_states:
