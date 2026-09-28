@@ -5,14 +5,14 @@ from PySide6.QtSvg import QSvgRenderer
 
 
 class ChibiCharacter:
-    """Cute animal mascot renderer using bundled Twemoji SVG artwork."""
+    """Cute animal mascot renderer using bundled original kawaii mascot SVG artwork."""
 
     ASSETS = {
-        '현무': 'twemoji_turtle.svg',
-        '김선달': 'twemoji_black_bird.svg',
-        '이묵': 'twemoji_snake.svg',
-        '너부리': 'twemoji_raccoon.svg',
-        '알프레도': 'twemoji_cat.svg',
+        '현무': 'hyeonmu.svg',
+        '김선달': 'seondal.svg',
+        '이묵': 'imuk.svg',
+        '너부리': 'neoburi.svg',
+        '알프레도': 'alfredo.svg',
     }
 
     ROLE_COLORS = {
@@ -39,15 +39,13 @@ class ChibiCharacter:
         self.frame = (self.frame + 1) % 60
 
     def paint(self, painter, x, y, scale=2.15):
-        # Keep the characters visually consistent: same SVG source, same box,
-        # only their role badge/accent differs.
+        # Keep the five mascots visually consistent while preserving each animal's silhouette.
         size = int(86 * scale / 2.15)
         box = QRectF(float(x), float(y), float(size), float(size))
         if self.renderer and self.renderer.isValid():
             self.renderer.render(painter, box)
 
-        # Small role badge under the mascot so the five agents remain distinct
-        # even when the window is resized.
+        # Small accent badge under each mascot so roles remain readable at a glance.
         painter.save()
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(self.ROLE_COLORS.get(self.name, '#888888')))
