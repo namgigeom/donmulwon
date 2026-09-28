@@ -176,7 +176,7 @@ class MainWindow(QMainWindow):
         self.status=QLabel('대기 중 · 실제 시각 기준 사무실 상태 유지'); layout.addWidget(self.status)
         self.progress=QProgressBar(); self.progress.setRange(0,100); self.progress.setValue(0); self.progress.hide(); layout.addWidget(self.progress)
         self.meeting=MeetingLogPanel(); self.meeting.set_status('대기 중','분석을 시작하면 전원이 출입문에서 회의실로 이동합니다.'); layout.addWidget(self.meeting)
-        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setFixedHeight(64); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:7px;color:#bfb6a6;}'); layout.addWidget(self.team_status)
+        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setFixedHeight(72); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:5px;color:#bfb6a6;overflow:hidden;}'); layout.addWidget(self.team_status)
         self._reset_team_status()
         self.result=ResultPanel(); self.result.show_waiting(); layout.addWidget(self.result)
         self.setCentralWidget(root); self.thread=None; self.worker=None; self.meeting_started_at=0.0
