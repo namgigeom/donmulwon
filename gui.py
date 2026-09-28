@@ -200,8 +200,8 @@ class MainWindow(QMainWindow):
             answer=final.split('[MEETING_LOG]',1)[0].strip()
             log=final.split('[MEETING_LOG]',1)[1] if '[MEETING_LOG]' in final else ''
             self.progress.setValue(100)
-            self._set_team_state('알프레도','분석완료! 회의완료!')
-            for name in ['현무','김선달','이묵','너부리']: self._set_team_state(name,'회의중')
+            for name in ['현무','김선달','이묵','너부리','알프레도']: self._set_team_state(name,'회의중')
+            self._set_team_state('알프레도','회의중')
             self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.')
             self.office.characters.set_meeting_log(log[-16000:])
             self.office.characters.set_meeting_stage('verdict')
