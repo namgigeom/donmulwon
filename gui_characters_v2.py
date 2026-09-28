@@ -1,125 +1,58 @@
-import time, re
-from PySide6.QtCore import Qt, QRect, QPoint
-from PySide6.QtGui import QColor, QFont, QPainterPath
+import os, time, re
+from PySide6.QtCore import Qt, QRect, QPoint, QRectF, QByteArray
+from PySide6.QtGui import QColor, QFont
+from PySide6.QtSvg import QSvgRenderer
+
 
 class ChibiCharacter:
-    """Original soft 2D chibi mascot renderer. No pixel-art styling."""
-    PALETTE = {
-        '현무': ('#7fa878','#4d6848','#dcebd2','#eea5a1'),
-        '김선달': ('#50575c','#2b3034','#d9dee0','#e9a5a0'),
-        '이묵': ('#8fbc67','#4f7139','#e4f1cf','#eeaaa4'),
-        '너부리': ('#b39b87','#695747','#eadbce','#eda7a1'),
-        '알프레도': ('#e0bfa7','#70584b','#fae8db','#eca7a1'),
+    """Cute animal mascot renderer using bundled Twemoji SVG artwork."""
+
+    ASSETS = {
+        '현무': 'twemoji_turtle.svg',
+        '김선달': 'twemoji_black_bird.svg',
+        '이묵': 'twemoji_snake.svg',
+        '너부리': 'twemoji_raccoon.svg',
+        '알프레도': 'twemoji_cat.svg',
+    }
+
+    ROLE_COLORS = {
+        '현무': '#78a96b',
+        '김선달': '#66717a',
+        '이묵': '#86b85b',
+        '너부리': '#a88a73',
+        '알프레도': '#e2a96f',
     }
 
     def __init__(self, name):
         self.name = name
         self.frame = 0
+        self.renderer = None
+        filename = self.ASSETS.get(name)
+        if filename:
+            path = os.path.join(os.path.dirname(__file__), 'assets', 'office_animals', filename)
+            try:
+                self.renderer = QSvgRenderer(path)
+            except Exception:
+                self.renderer = None
 
     def tick(self):
         self.frame = (self.frame + 1) % 60
 
-    def ellipse(self, p, x, y, w, h, color):
-        p.setPen(Qt.NoPen); p.setBrush(QColor(color))
-        p.drawEllipse(int(x), int(y), int(w), int(h))
+    def paint(self, painter, x, y, scale=2.15):
+        # Keep the characters visually consistent: same SVG source, same box,
+        # only their role badge/accent differs.
+        size = int(86 * scale / 2.15)
+        box = QRectF(float(x), float(y), float(size), float(size))
+        if self.renderer and self.renderer.isValid():
+            self.renderer.render(painter, box)
 
-    def path(self, p, points, color):
-        q = QPainterPath()
-        q.moveTo(points[0][0], points[0][1])
-        for x, y in points[1:]:
-            q.lineTo(x, y)
-        q.closeSubpath()
-        p.setPen(Qt.NoPen); p.setBrush(QColor(color)); p.drawPath(q)
-
-    def line(self, p, a, b, color, width=2):
-        pen = p.pen(); pen.setColor(QColor(color)); pen.setWidth(max(1, int(width)))
-        p.setPen(pen); p.drawLine(QPoint(int(a[0]), int(a[1])), QPoint(int(b[0]), int(b[1])))
-        p.setPen(Qt.NoPen)
-
-    def face(self, p, x, y, s, dark, cheek):
-        # simple sleepy bean eyes + tiny mouth
-        self.ellipse(p, x+19*s, y+31*s, 5*s, 7*s, dark)
-        self.ellipse(p, x+46*s, y+31*s, 5*s, 7*s, dark)
-        self.ellipse(p, x+10*s, y+44*s, 10*s, 6*s, cheek)
-        self.ellipse(p, x+50*s, y+44*s, 10*s, 6*s, cheek)
-        self.line(p, (x+31*s,y+44*s), (x+34*s,y+46*s), dark, 1.5)
-        self.line(p, (x+34*s,y+46*s), (x+37*s,y+44*s), dark, 1.5)
-
-    def body(self, p, x, y, s, body, dark, light):
-        self.ellipse(p,x+17*s,y+66*s,40*s,32*s,dark)
-        self.ellipse(p,x+20*s,y+63*s,34*s,30*s,body)
-        self.ellipse(p,x+28*s,y+73*s,18*s,13*s,light)
-        self.ellipse(p,x+8*s,y+72*s,15*s,10*s,body)
-        self.ellipse(p,x+52*s,y+72*s,15*s,10*s,body)
-        self.ellipse(p,x+20*s,y+88*s,15*s,9*s,dark)
-        self.ellipse(p,x+40*s,y+88*s,15*s,9*s,dark)
-
-    def paint(self,p,x,y,scale=2.15):
-        body,dark,light,cheek=self.PALETTE[self.name]
-        s=scale
-        if self.name == '현무': self.turtle(p,x,y,s,body,dark,light,cheek)
-        elif self.name == '김선달': self.crow(p,x,y,s,body,dark,light,cheek)
-        elif self.name == '이묵': self.snake(p,x,y,s,body,dark,light,cheek)
-        elif self.name == '너부리': self.raccoon(p,x,y,s,body,dark,light,cheek)
-        else: self.cat(p,x,y,s,body,dark,light,cheek)
-
-    def base_head(self,p,x,y,s,body,dark,light,cheek):
-        self.ellipse(p,x+6*s,y+10*s,63*s,58*s,dark)
-        self.ellipse(p,x+10*s,y+14*s,55*s,50*s,body)
-        self.ellipse(p,x+17*s,y+20*s,41*s,36*s,light)
-        self.face(p,x+12*s,y+13*s,s,dark,cheek)
-        self.body(p,x,y,s,body,dark,light)
-
-    def turtle(self,p,x,y,s,body,dark,light,cheek):
-        self.ellipse(p,x+4*s,y+48*s,66*s,43*s,dark)
-        self.ellipse(p,x+9*s,y+50*s,56*s,34*s,body)
-        self.ellipse(p,x+19*s,y+55*s,36*s,23*s,light)
-        self.line(p,(x+37*s,y+55*s),(x+37*s,y+78*s),dark,1.5)
-        self.line(p,(x+20*s,y+66*s),(x+54*s,y+66*s),dark,1.5)
-        self.base_head(p,x,y,s,body,dark,light,cheek)
-
-    def crow(self,p,x,y,s,body,dark,light,cheek):
-        self.path(p,[(x+25*s,y+16*s),(x+33*s,y+1*s),(x+42*s,y+16*s)],dark)
-        self.base_head(p,x,y,s,body,dark,light,cheek)
-        self.path(p,[(x+61*s,y+36*s),(x+78*s,y+41*s),(x+61*s,y+46*s)],'#e0b35e')
-
-    def snake(self,p,x,y,s,body,dark,light,cheek):
-        self.ellipse(p,x+2*s,y+57*s,67*s,31*s,dark)
-        self.ellipse(p,x+7*s,y+59*s,57*s,21*s,body)
-        self.ellipse(p,x+19*s,y+9*s,49*s,56*s,dark)
-        self.ellipse(p,x+23*s,y+13*s,41*s,48*s,body)
-        self.ellipse(p,x+29*s,y+20*s,29*s,31*s,light)
-        self.face(p,x+25*s,y+13*s,s,dark,cheek)
-        self.line(p,(x+64*s,y+41*s),(x+77*s,y+41*s),'#d96e68',1.5)
-        self.line(p,(x+77*s,y+41*s),(x+81*s,y+38*s),'#d96e68',1.5)
-        self.line(p,(x+77*s,y+41*s),(x+81*s,y+44*s),'#d96e68',1.5)
-        self.body(p,x,y+3*s,s,body,dark,light)
-
-    def raccoon(self,p,x,y,s,body,dark,light,cheek):
-        self.path(p,[(x+11*s,y+25*s),(x+13*s,y+3*s),(x+30*s,y+19*s)],dark)
-        self.path(p,[(x+43*s,y+19*s),(x+60*s,y+3*s),(x+62*s,y+25*s)],dark)
-        self.path(p,[(x+16*s,y+20*s),(x+17*s,y+10*s),(x+25*s,y+20*s)],light)
-        self.path(p,[(x+48*s,y+20*s),(x+57*s,y+10*s),(x+57*s,y+20*s)],light)
-        self.base_head(p,x,y,s,body,dark,light,cheek)
-        self.ellipse(p,x+14*s,y+28*s,22*s,14*s,dark)
-        self.ellipse(p,x+43*s,y+28*s,22*s,14*s,dark)
-        self.ellipse(p,x+20*s,y+31*s,8*s,7*s,light)
-        self.ellipse(p,x+49*s,y+31*s,8*s,7*s,light)
-        self.ellipse(p,x+59*s,y+70*s,31*s,18*s,dark)
-        self.ellipse(p,x+64*s,y+68*s,25*s,14*s,body)
-
-    def cat(self,p,x,y,s,body,dark,light,cheek):
-        self.path(p,[(x+11*s,y+25*s),(x+14*s,y+3*s),(x+31*s,y+19*s)],dark)
-        self.path(p,[(x+42*s,y+19*s),(x+59*s,y+3*s),(x+62*s,y+25*s)],dark)
-        self.path(p,[(x+16*s,y+20*s),(x+17*s,y+10*s),(x+25*s,y+20*s)],light)
-        self.path(p,[(x+48*s,y+20*s),(x+57*s,y+10*s),(x+57*s,y+20*s)],light)
-        self.base_head(p,x,y,s,body,dark,light,cheek)
-        # Alfredo: tiny round glasses
-        self.line(p,(x+17*s,y+33*s),(x+30*s,y+33*s),dark,1.5)
-        self.line(p,(x+42*s,y+33*s),(x+55*s,y+33*s),dark,1.5)
-        self.line(p,(x+30*s,y+33*s),(x+42*s,y+33*s),dark,1.5)
-        self.ellipse(p,x+60*s,y+72*s,27*s,14*s,dark)
-        self.ellipse(p,x+64*s,y+69*s,23*s,11*s,body)
+        # Small role badge under the mascot so the five agents remain distinct
+        # even when the window is resized.
+        painter.save()
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(self.ROLE_COLORS.get(self.name, '#888888')))
+        painter.drawEllipse(QRectF(x + size * 0.39, y + size * 0.88, size * 0.22, size * 0.08))
+        painter.restore()
 
 
 class CharacterLayer:
