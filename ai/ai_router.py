@@ -25,7 +25,7 @@ OPENROUTER_DEBATE_MODEL = os.getenv(
 )
 
 GEMINI_MAX_RETRIES = 0
-OPENROUTER_MAX_RETRIES = 0
+OPENROUTER_MAX_RETRIES = 1
 GEMINI_TIMEOUT_SECONDS = 25
 OPENROUTER_TIMEOUT_SECONDS = 20
 
@@ -160,9 +160,25 @@ def _openrouter_generate(prompt, config=None, model=None):
             if isinstance(item, dict)
         )
 
+    # 일부 OpenRouter 모델은 content를 비워 두고 reasoning만 반환하거나
+    # content를 배열/비표준 형태로 반환할 수 있다. 이 경우 실제 표시 가능한
+    # 텍스트를 최대한 복구한 뒤, 그래도 비어 있으면 호출자가 재시도할 수 있게 오류를 낸다.
     if not text:
+        reasoning = message.get("reasoning", "")
+        if isinstance(reasoning, list):
+            reasoning = "".join(
+                item.get("text", "") if isinstance(item, dict) else str(item)
+                for item in reasoning
+            )
+        if reasoning:
+            text = str(reasoning)
+
+    if not text:
+        finish_reason = choices[0].get("finish_reason")
+        provider = data.get("provider")
         raise AIRouterError(
             "OpenRouter 응답 텍스트가 비어 있습니다."
+            f" (model={selected_model}, provider={provider}, finish_reason={finish_reason})"
         )
 
     return SimpleNamespace(text=text)
