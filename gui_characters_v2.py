@@ -1,28 +1,15 @@
 import time, re
 from PySide6.QtCore import Qt, QRect, QPoint
-from PySide6.QtGui import QColor, QFont, QPolygon
+from PySide6.QtGui import QColor, QFont, QPainterPath
 
-# Cute rounded pixel-mascot characters.
-# Original character design: oversized heads, tiny bodies, simple faces, office suits.
-# Intentionally avoids copying any existing character design.
-
-class PixelCharacter:
-    """Cute original chibi pixel mascots for DONMULWON.
-
-    Design direction:
-    - oversized soft head
-    - tiny rounded body
-    - very simple dot eyes / tiny mouth
-    - small ears, horns, beak, shell and tail per role
-    - no suits: characters are the visual identity of the office
-    """
-
+class ChibiCharacter:
+    """Original soft 2D chibi mascot renderer. No pixel-art styling."""
     PALETTE = {
-        '현무':     {'body':'#7f9f78','dark':'#3e5140','light':'#c9d8b8','cheek':'#e8a6a0','accent':'#6e8d68'},
-        '김선달':   {'body':'#3b4145','dark':'#202427','light':'#727b80','cheek':'#d9908c','accent':'#d2b36f'},
-        '이묵':     {'body':'#76a45f','dark':'#30452a','light':'#b8d393','cheek':'#e8a29c','accent':'#dfc477'},
-        '너부리':   {'body':'#9b8f84','dark':'#514940','light':'#d7cabb','cheek':'#e7a09a','accent':'#a97e59'},
-        '알프레도': {'body':'#d0b9a7','dark':'#5a4d47','light':'#f2dfcf','cheek':'#e6a29c','accent':'#b78b62'},
+        '현무': ('#7fa878','#4d6848','#dcebd2','#eea5a1'),
+        '김선달': ('#50575c','#2b3034','#d9dee0','#e9a5a0'),
+        '이묵': ('#8fbc67','#4f7139','#e4f1cf','#eeaaa4'),
+        '너부리': ('#b39b87','#695747','#eadbce','#eda7a1'),
+        '알프레도': ('#e0bfa7','#70584b','#fae8db','#eca7a1'),
     }
 
     def __init__(self, name):
@@ -32,146 +19,107 @@ class PixelCharacter:
     def tick(self):
         self.frame = (self.frame + 1) % 60
 
-    def rect(self,p,x,y,w,h,c,r=0):
-        p.setPen(Qt.NoPen); p.setBrush(QColor(c))
-        if r: p.drawRoundedRect(int(x),int(y),int(w),int(h),r,r)
-        else: p.drawRect(int(x),int(y),int(w),int(h))
+    def ellipse(self, p, x, y, w, h, color):
+        p.setPen(Qt.NoPen); p.setBrush(QColor(color))
+        p.drawEllipse(int(x), int(y), int(w), int(h))
 
-    def ell(self,p,x,y,w,h,c):
-        p.setPen(Qt.NoPen); p.setBrush(QColor(c))
-        p.drawEllipse(int(x),int(y),int(w),int(h))
+    def path(self, p, points, color):
+        q = QPainterPath()
+        q.moveTo(points[0][0], points[0][1])
+        for x, y in points[1:]:
+            q.lineTo(x, y)
+        q.closeSubpath()
+        p.setPen(Qt.NoPen); p.setBrush(QColor(color)); p.drawPath(q)
 
-    def poly(self,p,pts,c):
-        p.setPen(Qt.NoPen); p.setBrush(QColor(c))
-        p.drawPolygon(QPolygon([QPoint(int(x),int(y)) for x,y in pts]))
-
-    def line(self,p,a,b,c,width=1):
-        p.setPen(QColor(c)); p.setBrush(Qt.NoBrush)
-        p.drawLine(QPoint(int(a[0]),int(a[1])),QPoint(int(b[0]),int(b[1])))
+    def line(self, p, a, b, color, width=2):
+        pen = p.pen(); pen.setColor(QColor(color)); pen.setWidth(max(1, int(width)))
+        p.setPen(pen); p.drawLine(QPoint(int(a[0]), int(a[1])), QPoint(int(b[0]), int(b[1])))
         p.setPen(Qt.NoPen)
 
-    def face(self,p,x,y,s,q):
-        dark=q['dark']; cheek=q['cheek']
-        # tiny bean-like eyes
-        self.ell(p,x+18*s,y+31*s,5*s,7*s,dark)
-        self.ell(p,x+45*s,y+31*s,5*s,7*s,dark)
-        # soft cheeks
-        self.ell(p,x+10*s,y+43*s,9*s,5*s,cheek)
-        self.ell(p,x+49*s,y+43*s,9*s,5*s,cheek)
-        # tiny happy mouth
-        self.line(p,(x+30*s,y+43*s),(x+33*s,y+45*s),dark,1)
-        self.line(p,(x+33*s,y+45*s),(x+36*s,y+43*s),dark,1)
+    def face(self, p, x, y, s, dark, cheek):
+        # simple sleepy bean eyes + tiny mouth
+        self.ellipse(p, x+19*s, y+31*s, 5*s, 7*s, dark)
+        self.ellipse(p, x+46*s, y+31*s, 5*s, 7*s, dark)
+        self.ellipse(p, x+10*s, y+44*s, 10*s, 6*s, cheek)
+        self.ellipse(p, x+50*s, y+44*s, 10*s, 6*s, cheek)
+        self.line(p, (x+31*s,y+44*s), (x+34*s,y+46*s), dark, 1.5)
+        self.line(p, (x+34*s,y+46*s), (x+37*s,y+44*s), dark, 1.5)
 
-    def body(self,p,x,y,s,q):
-        body,dark,light,accent=q['body'],q['dark'],q['light'],q['accent']
-        # tiny bean body
-        self.ell(p,x+17*s,y+65*s,39*s,31*s,dark)
-        self.ell(p,x+20*s,y+63*s,33*s,29*s,body)
-        # belly patch
-        self.ell(p,x+27*s,y+72*s,19*s,14*s,light)
-        # little arms
-        self.ell(p,x+8*s,y+72*s,14*s,10*s,body)
-        self.ell(p,x+53*s,y+72*s,14*s,10*s,body)
-        # tiny feet
-        self.ell(p,x+19*s,y+88*s,15*s,8*s,dark)
-        self.ell(p,x+40*s,y+88*s,15*s,8*s,dark)
+    def body(self, p, x, y, s, body, dark, light):
+        self.ellipse(p,x+17*s,y+66*s,40*s,32*s,dark)
+        self.ellipse(p,x+20*s,y+63*s,34*s,30*s,body)
+        self.ellipse(p,x+28*s,y+73*s,18*s,13*s,light)
+        self.ellipse(p,x+8*s,y+72*s,15*s,10*s,body)
+        self.ellipse(p,x+52*s,y+72*s,15*s,10*s,body)
+        self.ellipse(p,x+20*s,y+88*s,15*s,9*s,dark)
+        self.ellipse(p,x+40*s,y+88*s,15*s,9*s,dark)
 
     def paint(self,p,x,y,scale=2.15):
+        body,dark,light,cheek=self.PALETTE[self.name]
         s=scale
-        q=self.PALETTE[self.name]
-        if self.name=='현무': self.turtle(p,x,y,s,q)
-        elif self.name=='김선달': self.crow(p,x,y,s,q)
-        elif self.name=='이묵': self.snake(p,x,y,s,q)
-        elif self.name=='너부리': self.raccoon(p,x,y,s,q)
-        else: self.cat(p,x,y,s,q)
+        if self.name == '현무': self.turtle(p,x,y,s,body,dark,light,cheek)
+        elif self.name == '김선달': self.crow(p,x,y,s,body,dark,light,cheek)
+        elif self.name == '이묵': self.snake(p,x,y,s,body,dark,light,cheek)
+        elif self.name == '너부리': self.raccoon(p,x,y,s,body,dark,light,cheek)
+        else: self.cat(p,x,y,s,body,dark,light,cheek)
 
-    def turtle(self,p,x,y,s,q):
-        body,dark,light=q['body'],q['dark'],q['light']
-        # round shell behind head
-        self.ell(p,x+5*s,y+38*s,60*s,42*s,dark)
-        self.ell(p,x+9*s,y+39*s,52*s,34*s,body)
-        self.ell(p,x+17*s,y+44*s,36*s,25*s,light)
-        self.line(p,(x+35*s,y+44*s),(x+35*s,y+67*s),dark,1)
-        self.line(p,(x+19*s,y+56*s),(x+51*s,y+56*s),dark,1)
-        # huge soft head
-        self.ell(p,x+8*s,y+10*s,62*s,58*s,dark)
-        self.ell(p,x+12*s,y+13*s,54*s,52*s,body)
-        self.ell(p,x+17*s,y+19*s,44*s,40*s,light)
-        self.face(p,x+14*s,y+12*s,s,q)
-        self.body(p,x+3*s,y+0,s,q)
+    def base_head(self,p,x,y,s,body,dark,light,cheek):
+        self.ellipse(p,x+6*s,y+10*s,63*s,58*s,dark)
+        self.ellipse(p,x+10*s,y+14*s,55*s,50*s,body)
+        self.ellipse(p,x+17*s,y+20*s,41*s,36*s,light)
+        self.face(p,x+12*s,y+13*s,s,dark,cheek)
+        self.body(p,x,y,s,body,dark,light)
 
-    def crow(self,p,x,y,s,q):
-        body,dark,light,accent=q['body'],q['dark'],q['light'],q['accent']
-        # tiny feather tuft
-        self.poly(p,[(x+28*s,y+13*s),(x+34*s,y+2*s),(x+39*s,y+14*s)],dark)
-        # round head
-        self.ell(p,x+5*s,y+11*s,62*s,57*s,dark)
-        self.ell(p,x+10*s,y+15*s,52*s,48*s,body)
-        self.ell(p,x+16*s,y+21*s,40*s,35*s,light)
-        self.face(p,x+13*s,y+14*s,s,q)
-        # tiny beak
-        self.poly(p,[(x+58*s,y+36*s),(x+74*s,y+40*s),(x+58*s,y+44*s)],accent)
-        self.body(p,x+2*s,y,s,q)
+    def turtle(self,p,x,y,s,body,dark,light,cheek):
+        self.ellipse(p,x+4*s,y+48*s,66*s,43*s,dark)
+        self.ellipse(p,x+9*s,y+50*s,56*s,34*s,body)
+        self.ellipse(p,x+19*s,y+55*s,36*s,23*s,light)
+        self.line(p,(x+37*s,y+55*s),(x+37*s,y+78*s),dark,1.5)
+        self.line(p,(x+20*s,y+66*s),(x+54*s,y+66*s),dark,1.5)
+        self.base_head(p,x,y,s,body,dark,light,cheek)
 
-    def snake(self,p,x,y,s,q):
-        body,dark,light,accent=q['body'],q['dark'],q['light'],q['accent']
-        # curled little body
-        self.ell(p,x+3*s,y+48*s,61*s,27*s,dark)
-        self.ell(p,x+8*s,y+50*s,51*s,18*s,body)
-        # upright round head
-        self.ell(p,x+20*s,y+10*s,47*s,52*s,dark)
-        self.ell(p,x+24*s,y+14*s,39*s,44*s,body)
-        self.ell(p,x+29*s,y+20*s,29*s,31*s,light)
-        self.face(p,x+26*s,y+13*s,s,q)
-        # tiny tongue
-        self.line(p,(x+62*s,y+40*s),(x+72*s,y+40*s),accent,1)
-        self.line(p,(x+72*s,y+40*s),(x+76*s,y+37*s),accent,1)
-        self.line(p,(x+72*s,y+40*s),(x+76*s,y+43*s),accent,1)
-        self.body(p,x+1*s,y+4*s,s,q)
+    def crow(self,p,x,y,s,body,dark,light,cheek):
+        self.path(p,[(x+25*s,y+16*s),(x+33*s,y+1*s),(x+42*s,y+16*s)],dark)
+        self.base_head(p,x,y,s,body,dark,light,cheek)
+        self.path(p,[(x+61*s,y+36*s),(x+78*s,y+41*s),(x+61*s,y+46*s)],'#e0b35e')
 
-    def raccoon(self,p,x,y,s,q):
-        body,dark,light=q['body'],q['dark'],q['light']
-        # soft triangular ears
-        self.poly(p,[(x+12*s,y+23*s),(x+13*s,y+4*s),(x+29*s,y+18*s)],dark)
-        self.poly(p,[(x+42*s,y+18*s),(x+58*s,y+4*s),(x+59*s,y+23*s)],dark)
-        self.poly(p,[(x+16*s,y+19*s),(x+16*s,y+10*s),(x+25*s,y+19*s)],light)
-        self.poly(p,[(x+46*s,y+19*s),(x+56*s,y+10*s),(x+55*s,y+20*s)],light)
-        # round head
-        self.ell(p,x+7*s,y+12*s,61*s,57*s,dark)
-        self.ell(p,x+12*s,y+17*s,51*s,48*s,body)
-        self.ell(p,x+17*s,y+23*s,41*s,36*s,light)
-        # simple mask
-        self.ell(p,x+15*s,y+27*s,20*s,13*s,dark)
-        self.ell(p,x+43*s,y+27*s,20*s,13*s,dark)
-        self.ell(p,x+20*s,y+29*s,8*s,7*s,light)
-        self.ell(p,x+48*s,y+29*s,8*s,7*s,light)
-        self.face(p,x+13*s,y+14*s,s,q)
-        self.body(p,x+2*s,y,s,q)
-        # fluffy tail
-        self.ell(p,x+58*s,y+67*s,27*s,19*s,dark)
-        self.ell(p,x+64*s,y+66*s,23*s,14*s,body)
+    def snake(self,p,x,y,s,body,dark,light,cheek):
+        self.ellipse(p,x+2*s,y+57*s,67*s,31*s,dark)
+        self.ellipse(p,x+7*s,y+59*s,57*s,21*s,body)
+        self.ellipse(p,x+19*s,y+9*s,49*s,56*s,dark)
+        self.ellipse(p,x+23*s,y+13*s,41*s,48*s,body)
+        self.ellipse(p,x+29*s,y+20*s,29*s,31*s,light)
+        self.face(p,x+25*s,y+13*s,s,dark,cheek)
+        self.line(p,(x+64*s,y+41*s),(x+77*s,y+41*s),'#d96e68',1.5)
+        self.line(p,(x+77*s,y+41*s),(x+81*s,y+38*s),'#d96e68',1.5)
+        self.line(p,(x+77*s,y+41*s),(x+81*s,y+44*s),'#d96e68',1.5)
+        self.body(p,x,y+3*s,s,body,dark,light)
 
-    def cat(self,p,x,y,s,q):
-        body,dark,light=q['body'],q['dark'],q['light']
-        # soft cat ears
-        self.poly(p,[(x+11*s,y+24*s),(x+14*s,y+4*s),(x+30*s,y+19*s)],dark)
-        self.poly(p,[(x+42*s,y+19*s),(x+58*s,y+4*s),(x+61*s,y+24*s)],dark)
-        self.poly(p,[(x+15*s,y+20*s),(x+16*s,y+10*s),(x+25*s,y+20*s)],light)
-        self.poly(p,[(x+47*s,y+20*s),(x+57*s,y+10*s),(x+57*s,y+20*s)],light)
-        # huge fluffy head
-        self.ell(p,x+7*s,y+12*s,61*s,57*s,dark)
-        self.ell(p,x+12*s,y+17*s,51*s,48*s,body)
-        self.ell(p,x+17*s,y+22*s,41*s,36*s,light)
-        self.face(p,x+13*s,y+14*s,s,q)
-        # tiny glasses, kept extremely simple
-        self.line(p,(x+17*s,y+32*s),(x+30*s,y+32*s),dark,1)
-        self.line(p,(x+42*s,y+32*s),(x+55*s,y+32*s),dark,1)
-        self.line(p,(x+30*s,y+32*s),(x+42*s,y+32*s),dark,1)
-        self.body(p,x+2*s,y,s,q)
-        # little tail
-        self.ell(p,x+59*s,y+72*s,26*s,13*s,dark)
-        self.ell(p,x+64*s,y+68*s,23*s,11*s,body)
+    def raccoon(self,p,x,y,s,body,dark,light,cheek):
+        self.path(p,[(x+11*s,y+25*s),(x+13*s,y+3*s),(x+30*s,y+19*s)],dark)
+        self.path(p,[(x+43*s,y+19*s),(x+60*s,y+3*s),(x+62*s,y+25*s)],dark)
+        self.path(p,[(x+16*s,y+20*s),(x+17*s,y+10*s),(x+25*s,y+20*s)],light)
+        self.path(p,[(x+48*s,y+20*s),(x+57*s,y+10*s),(x+57*s,y+20*s)],light)
+        self.base_head(p,x,y,s,body,dark,light,cheek)
+        self.ellipse(p,x+14*s,y+28*s,22*s,14*s,dark)
+        self.ellipse(p,x+43*s,y+28*s,22*s,14*s,dark)
+        self.ellipse(p,x+20*s,y+31*s,8*s,7*s,light)
+        self.ellipse(p,x+49*s,y+31*s,8*s,7*s,light)
+        self.ellipse(p,x+59*s,y+70*s,31*s,18*s,dark)
+        self.ellipse(p,x+64*s,y+68*s,25*s,14*s,body)
 
+    def cat(self,p,x,y,s,body,dark,light,cheek):
+        self.path(p,[(x+11*s,y+25*s),(x+14*s,y+3*s),(x+31*s,y+19*s)],dark)
+        self.path(p,[(x+42*s,y+19*s),(x+59*s,y+3*s),(x+62*s,y+25*s)],dark)
+        self.path(p,[(x+16*s,y+20*s),(x+17*s,y+10*s),(x+25*s,y+20*s)],light)
+        self.path(p,[(x+48*s,y+20*s),(x+57*s,y+10*s),(x+57*s,y+20*s)],light)
+        self.base_head(p,x,y,s,body,dark,light,cheek)
+        # Alfredo: tiny round glasses
+        self.line(p,(x+17*s,y+33*s),(x+30*s,y+33*s),dark,1.5)
+        self.line(p,(x+42*s,y+33*s),(x+55*s,y+33*s),dark,1.5)
+        self.line(p,(x+30*s,y+33*s),(x+42*s,y+33*s),dark,1.5)
+        self.ellipse(p,x+60*s,y+72*s,27*s,14*s,dark)
+        self.ellipse(p,x+64*s,y+69*s,23*s,11*s,body)
 
 
 class CharacterLayer:
@@ -181,7 +129,7 @@ class CharacterLayer:
     DOOR=(42.0,410.0)
 
     def __init__(self):
-        self.characters={n:PixelCharacter(n) for n in self.POSITIONS}
+        self.characters={n:ChibiCharacter(n) for n in self.POSITIONS}
         self.pos={n:(float(x),float(y)) for n,(x,y) in self.POSITIONS.items()}
         self.active={n:True for n in self.POSITIONS}
         self.mode='idle'; self.stage='idle'; self.queue=[]
@@ -294,6 +242,6 @@ class CharacterLayer:
         p.setPen(QColor('#8f7c5d'));p.setBrush(QColor('#f4ecda'))
         p.drawRoundedRect(bx,by,bw,bh,9,9)
         tailx=int(x+20 if bx>x else x+48)
-        p.drawPolygon(QPolygon([QPoint(tailx,by+bh),QPoint(tailx+15,by+bh),QPoint(tailx+7,by+bh+10)]))
+        p.drawPolygon([QPoint(tailx,by+bh),QPoint(tailx+15,by+bh),QPoint(tailx+7,by+bh+10)])
         p.setPen(QColor('#25221e'));p.setFont(QFont('Malgun Gothic',8,QFont.Bold))
         p.drawText(QRect(bx+10,by+5,bw-20,bh-8),Qt.AlignLeft|Qt.AlignVCenter,'\n'.join(lines))
