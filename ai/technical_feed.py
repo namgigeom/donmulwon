@@ -42,6 +42,7 @@ def get_market_data(ticker):
             threads=False,
             repair=True,
             multi_level_index=True,
+            timeout=10,
         )
     except Exception as exc:
         return {"error": f"Yahoo Finance 데이터 요청 실패: {type(exc).__name__}: {exc}"}
