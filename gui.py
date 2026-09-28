@@ -155,9 +155,28 @@ class MainWindow(QMainWindow):
         self.status=QLabel('대기 중 · 실제 시각 기준 사무실 상태 유지'); layout.addWidget(self.status)
         self.progress=QProgressBar(); self.progress.setRange(0,100); self.progress.setValue(0); self.progress.hide(); layout.addWidget(self.progress)
         self.meeting=MeetingLogPanel(); self.meeting.set_status('대기 중','분석을 시작하면 전원이 출입문에서 회의실로 이동합니다.'); layout.addWidget(self.meeting)
+        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setMaximumHeight(105); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:7px;color:#bfb6a6;}'); layout.addWidget(self.team_status)
+        self._reset_team_status()
         self.result=ResultPanel(); self.result.show_waiting(); layout.addWidget(self.result)
         self.setCentralWidget(root); self.thread=None; self.worker=None; self.meeting_started_at=0.0
         self.timer=QTimer(self); self.timer.timeout.connect(self.update_clock); self.timer.timeout.connect(self.animate); self.timer.start(250); self.update_clock()
+
+    def _reset_team_status(self):
+        self.team_states={'현무':'대기중','김선달':'대기중','이묵':'대기중','너부리':'대기중','알프레도':'대기중'}
+        self._render_team_status()
+
+    def _render_team_status(self):
+        icons={'현무':'🐢','김선달':'🐦','이묵':'🐍','너부리':'🦝','알프레도':'🐱'}
+        roles=['현무','김선달','이묵','너부리','알프레도']
+        cells=[]
+        for name in roles:
+            cells.append(f'<div style="display:inline-block;width:18%;padding:4px"><b>{icons[name]} {name}</b><br><span style="color:#c8a866">{html.escape(self.team_states[name])}</span></div>')
+        self.team_status.setHtml('<div style="font-family:Malgun Gothic;font-size:9pt">'+''.join(cells)+'</div>')
+
+    def _set_team_state(self,name,state):
+        if name in self.team_states:
+            self.team_states[name]=state
+            self._render_team_status()
 
     def animate(self): self.office.characters.tick(); self.office.update()
     def update_clock(self):
@@ -170,7 +189,7 @@ class MainWindow(QMainWindow):
         if not q or self.thread is not None: return
         self.meeting_started_at=time.time(); self.office.characters.summon_for_question(overtime=True); self.office.update()
         self.button.setEnabled(False); self.progress.show(); self.progress.setRange(0,100); self.progress.setValue(5)
-        self.meeting.set_status('⚔ AI TRADING TEAM 회의 시작','긴급 호출 · 전원이 출입문으로 출근하는 중...')
+        self._reset_team_status(); self.meeting.set_status('⚔ AI TRADING TEAM 회의 시작','긴급 호출 · 전원이 출입문으로 출근하는 중...')
         self.result.show_waiting(); self.status.setText('⚔️ AI TRADING TEAM 회의 진행 중...')
         self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(self.on_output); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(self.analysis_done); self.thread.start()
 
@@ -181,6 +200,8 @@ class MainWindow(QMainWindow):
             answer=final.split('[MEETING_LOG]',1)[0].strip()
             log=final.split('[MEETING_LOG]',1)[1] if '[MEETING_LOG]' in final else ''
             self.progress.setValue(100)
+            self._set_team_state('알프레도','분석완료! 회의완료!')
+            for name in ['현무','김선달','이묵','너부리']: self._set_team_state(name,'회의중')
             self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.')
             self.office.characters.set_meeting_log(log[-16000:])
             self.office.characters.set_meeting_stage('verdict')
@@ -206,6 +227,13 @@ class MainWindow(QMainWindow):
                 elif '알프레도' in line: stage='🐱 알프레도 · 최종 검증 중'
                 self.status.setText(f'⚔️ {stage}')
                 self.meeting.set_status(f'⚔️ AI TRADING TEAM · {stage}',detail[-220:])
+                for role,label in role_map.items():
+                    if role in line:
+                        name=label.split(' ',1)[1]
+                        if '통합 분석 완료' in line: self._set_team_state(name,'분석완료')
+                        elif '데이터 수집' in line: self._set_team_state(name,'자료조사중')
+                        elif 'AI 분석' in line: self._set_team_state(name,'분석중')
+                        else: self._set_team_state(name,'작업중')
                 self.progress.setValue(min(95, max(8, self.progress.value()+1)))
         self.office.update()
 
