@@ -155,7 +155,7 @@ class MainWindow(QMainWindow):
         self.status=QLabel('대기 중 · 실제 시각 기준 사무실 상태 유지'); layout.addWidget(self.status)
         self.progress=QProgressBar(); self.progress.setRange(0,100); self.progress.setValue(0); self.progress.hide(); layout.addWidget(self.progress)
         self.meeting=MeetingLogPanel(); self.meeting.set_status('대기 중','분석을 시작하면 전원이 출입문에서 회의실로 이동합니다.'); layout.addWidget(self.meeting)
-        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setMinimumHeight(145); self.team_status.setMaximumHeight(170); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:7px;color:#bfb6a6;}'); layout.addWidget(self.team_status)
+        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setFixedHeight(64); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:7px;color:#bfb6a6;}'); layout.addWidget(self.team_status)
         self._reset_team_status()
         self.result=ResultPanel(); self.result.show_waiting(); layout.addWidget(self.result)
         self.setCentralWidget(root); self.thread=None; self.worker=None; self.meeting_started_at=0.0
@@ -170,8 +170,15 @@ class MainWindow(QMainWindow):
         roles=['현무','김선달','이묵','너부리','알프레도']
         cells=[]
         for name in roles:
-            cells.append(f'<div style="display:inline-block;width:18%;padding:4px"><b>{icons[name]} {name}</b><br><span style="color:#c8a866">{html.escape(self.team_states[name])}</span></div>')
-        self.team_status.setHtml('<div style="font-family:Malgun Gothic;font-size:11pt">'+''.join(cells)+'</div>')
+            cells.append(
+                f'<td style="width:20%;text-align:center;padding:7px 3px;'
+                f'border-right:1px solid #3f3930"><b>{icons[name]} {name}</b>'
+                f'<br><span style="color:#c8a866;font-size:10pt">{html.escape(self.team_states[name])}</span></td>'
+            )
+        self.team_status.setHtml(
+            '<table width="100%" cellspacing="0" cellpadding="0" style="font-family:Malgun Gothic;">'
+            '<tr>'+''.join(cells)+'</tr></table>'
+        )
 
     def _set_team_state(self,name,state):
         if name in self.team_states:
