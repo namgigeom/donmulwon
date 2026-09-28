@@ -1,0 +1,16 @@
+DONMULWON GUI character artwork attribution
+
+The office animal character SVGs in this directory are based on Twemoji artwork:
+https://github.com/jdecked/twemoji
+
+Graphics are licensed under Creative Commons Attribution 4.0 International (CC-BY 4.0):
+https://creativecommons.org/licenses/by/4.0/
+
+Files:
+- twemoji_cat.svg
+- twemoji_snake.svg
+- twemoji_turtle.svg
+- twemoji_raccoon.svg
+- twemoji_black_bird.svg
+
+Twemoji graphics copyright their respective contributors.
