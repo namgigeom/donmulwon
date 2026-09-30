@@ -40,7 +40,8 @@ def get_access_token():
 
     response = requests.post(
         url,
-        data=data
+        data=data,
+        timeout=REQUEST_TIMEOUT
     )
 
     response.raise_for_status()
@@ -88,7 +89,8 @@ def get_holdings(token, account_seq):
 
     response = requests.get(
         url,
-        headers=headers
+        headers=headers,
+        timeout=REQUEST_TIMEOUT
     )
 
     response.raise_for_status()
