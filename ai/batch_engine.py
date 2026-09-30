@@ -15,6 +15,242 @@ ROLE_CONFIG = {
 }
 DATA_MAX_WORKERS = 6
 ROLE_MAX_WORKERS = 4
+ROLE_TIMEOUT_SECONDS = 90
+
+def _json(data):
+    return json.dumps(data, ensure_ascii=False, indent=2, default=str)
+
+@lru_cache(maxsize=32)
+def _extract_prompt(function):
+    source = inspect.getsource(function)
+    match = re.search(r"prompt\s*=\s*f([\"']{3})(.*?)(?:\1)", source, re.S)
+    if not match:
+        raise RuntimeError("기존 AI 프롬프트를 추출하지 못했습니다.")
+    return match.group(2)
+
+def _render_prompt(template, ticker_label, data_text):
+    prompt = template
+    for key, value in (("{data_text}", data_text), ("{ticker}", ticker_label), ("{target_ticker}", ticker_label)):
+        prompt = prompt.replace(key, value)
+    return prompt
+
+def _cached_call(namespace, value, function, *args):
+    return get_or_fetch(namespace, value, lambda: function(*args))
+
+def _parallel_map(tickers, worker, max_workers=DATA_MAX_WORKERS):
+    tickers = list(dict.fromkeys(tickers or []))
+    if len(tickers) <= 1:
+        return {t: worker(t) for t in tickers}
+    results = {}
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(tickers))) as executor:
+        futures = {executor.submit(worker, ticker): ticker for ticker in tickers}
+        for future in as_completed(futures):
+            ticker = futures[future]
+            results[ticker] = future.result()
+    return {ticker: results[ticker] for ticker in tickers}
+
+def _collect_crow_ticker(module, ticker):
+    company_fn = getattr(module, "get_company_data", None)
+    news_fn = getattr(module, "get_news", None)
+    financial_fn = getattr(module, "get_financials", None)
+    if not all(callable(fn) for fn in (company_fn, news_fn, financial_fn)):
+        collector = getattr(module, "collect_data", None)
+        if not callable(collector):
+            raise RuntimeError("김선달 데이터 수집 함수를 찾지 못했습니다.")
+        return collector(ticker)
+    jobs = {"company": ("crow.company", company_fn), "news": ("crow.news", news_fn), "financials": ("crow.financials", financial_fn)}
+    result = {}
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {executor.submit(_cached_call, namespace, ticker, fn, ticker): key for key, (namespace, fn) in jobs.items()}
+        for future in as_completed(futures):
+            result[futures[future]] = future.result()
+    return result
+
+def _collect_role_data(module, role, tickers, account_data):
+    tickers = list(dict.fromkeys(tickers or []))
+    memory = {}
+    try:
+        loader = getattr(module, "load_memory", None)
+        if callable(loader):
+            memory = loader()
+    except Exception:
+        pass
+
+    if role == "crow":
+        return {"role": role, "requested_tickers": tickers, "stocks": _parallel_map(tickers, lambda t: _collect_crow_ticker(module, t)), "memory": memory, "portfolio_context": account_data}
+
+    if role == "snake":
+        # 이묵은 기존 요약 collector가 아니라 실제 OHLCV/지표 전용 피드를 사용한다.
+        stocks = _parallel_map(tickers, lambda t: _cached_call("snake.technical_feed.v2", t, technical_feed.get_market_data, t))
+        ok = [t for t, v in stocks.items() if isinstance(v, dict) and v.get("status") == "OK"]
+        failed = {t: (v.get("error") if isinstance(v, dict) else "invalid result") for t, v in stocks.items() if not (isinstance(v, dict) and v.get("status") == "OK")}
+        print(f"📊 이묵 기술데이터: OK {len(ok)}/{len(stocks)}" + (f" | 실패: {failed}" if failed else ""))
+        return {
+            "role": role,
+            "requested_tickers": tickers,
+            "stocks": stocks,
+            "memory": memory,
+            "portfolio_context": account_data,
+            "technical_data_source": "ai.technical_feed.get_market_data",
+            "technical_data_rule": "status=OK이면 실제 기술지표와 최근 60개 캔들이 제공됨",
+        }
+
+    if role == "raccoon":
+        analyze_portfolio = getattr(module, "analyze_portfolio", None)
+        find_holding = getattr(module, "find_holding", None)
+        get_market_context = getattr(module, "get_market_context", None)
+        get_stock_data = getattr(module, "get_stock_data", None)
+        if not all(callable(x) for x in (analyze_portfolio, find_holding, get_market_context, get_stock_data)):
+            raise RuntimeError("너부리의 계좌/시장 데이터 함수를 찾지 못했습니다.")
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            portfolio_future = executor.submit(_cached_call, "raccoon.analyze_portfolio", _json(account_data), analyze_portfolio, account_data)
+            market_future = executor.submit(_cached_call, "raccoon.get_market_context", "current", get_market_context)
+            portfolio = portfolio_future.result()
+            market = market_future.result()
+        def raccoon_stock(ticker):
+            holding = _cached_call("raccoon.find_holding", (_json(account_data), ticker), find_holding, account_data, ticker)
+            stock_data = _cached_call("raccoon.get_stock_data", ticker, get_stock_data, ticker)
+            return {"holding": holding, "stock_data": stock_data}
+        return {"role": role, "requested_tickers": tickers, "stocks": _parallel_map(tickers, raccoon_stock), "market_data": market, "portfolio_context": portfolio, "memory": memory}
+
+    if role == "turtle":
+        get_market_data = getattr(module, "get_market_data", None)
+        get_market_trends = getattr(module, "get_market_trends", None)
+        get_stock_context = getattr(module, "get_stock_context", None)
+        if not all(callable(x) for x in (get_market_data, get_market_trends, get_stock_context)):
+            raise RuntimeError("현무의 시장 데이터 함수를 찾지 못했습니다.")
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            market_future = executor.submit(_cached_call, "turtle.get_market_data", "current", get_market_data)
+            trends_future = executor.submit(_cached_call, "turtle.get_market_trends", "current", get_market_trends)
+            market = market_future.result()
+            trends = trends_future.result()
+        stocks = _parallel_map(tickers, lambda t: _cached_call("turtle.get_stock_context", t, get_stock_context, t))
+        return {"role": role, "requested_tickers": tickers, "market_data": market, "market_trends": trends, "stocks": stocks, "memory": memory}
+
+    raise ValueError(f"지원하지 않는 role: {role}")
+
+def run_role_batch(module, role, tickers, account_data):
+    if module is None:
+        return None
+    function_name = "analyze_macro" if role == "turtle" else "analyze_stock"
+    function = getattr(module, function_name, None)
+    if not callable(function):
+        raise RuntimeError(f"{role}의 {function_name} 함수를 찾지 못했습니다.")
+    print(f"⏳ {ROLE_CONFIG[role]["name"]} 데이터 수집 시작: {", ".join(tickers) if tickers else "MARKET"}")
+    data = _collect_role_data(module, role, tickers, account_data)
+    print(f"📦 {ROLE_CONFIG[role]["name"]} 데이터 수집 완료")
+    data_text = _json(data)
+    ticker_label = ", ".join(tickers) if tickers else "MARKET / PORTFOLIO"
+    prompt = _render_prompt(_extract_prompt(function), ticker_label, data_text)
+    prompt += f"""
+
+==================================================
+⚡ 돈물원 통합 분석 지시
+==================================================
+이번 회의의 분석 대상은 다음과 같다.
+{ticker_label}
+위 데이터에 포함된 모든 종목을 빠짐없이 구분해서 분석한다.
+종목별 결론을 섞지 않는다.
+데이터에 없는 수치를 만들지 않는다.
+사용자가 매도/손절/익절 가격을 요청했다면 고정 퍼센트가 아니라 실제 변동성, 기술적 위치, 기업 상황, 시장환경, 계좌 상황을 근거로 판단한다.
+이 응답은 다른 팀원과 최종 팀장에게 전달된다. 각 종목별로 가장 중요한 사실과 판단을 명확하게 구분한다.
+
+[이묵 기술 데이터 강제 규칙]
+이묵에게 전달되는 stocks.<ticker>에 status=OK가 있으면 MA20/50/200, RSI14, MACD, ATR14, 거래량, 최근 고저점 및 최근 60개 OHLCV가 실제로 제공된 것이다.
+그 상태에서 '정밀 차트 데이터 미비', '차트 지표 미제공', 'market_data 빈 값'이라고 말하지 않는다.
+실제 수치와 캔들 데이터를 읽고 종목별 추세, 모멘텀, 거래량, 지지/저항을 판단한다.
+정말 데이터가 없는 종목에만 '확인 필요'를 사용한다.
+"""
+    router = getattr(module, "ai_router", None)
+    if router is None or not hasattr(router, "generate_content"):
+        raise RuntimeError(f"{role}의 ai_router를 찾지 못했습니다.")
+    print(f"🤖 {ROLE_CONFIG[role]["name"]} AI 분석 요청 시작")
+    response = router.generate_content(model="gemini-3.6-flash", contents=prompt)
+    print(f"🤖 {ROLE_CONFIG[role]["name"]} AI 분석 응답 수신")
+    result = getattr(response, "text", str(response))
+    if not isinstance(result, str) or not result.strip():
+        raise RuntimeError(f"{ROLE_CONFIG[role]['name']} AI 응답이 비어 있습니다.")
+    result = result.strip()
+
+    # 기술 데이터는 LLM의 서술에만 의존하지 않고 최종 검증 단계까지 전달한다.
+    # chart_data(60개 캔들)는 제외하고 핵심 지표 원본만 첨부해 토큰 낭비를 줄인다.
+    if role == "snake":
+        compact_stocks = {}
+        for symbol, stock in data.get("stocks", {}).items():
+            if isinstance(stock, dict):
+                compact_stocks[symbol] = {
+                    key: value for key, value in stock.items()
+                    if key != "chart_data"
+                }
+        result = (
+            str(result)
+            + "\n\n[RAW_TECHNICAL_EVIDENCE]\n"
+            + _json(compact_stocks)
+            + "\n[/RAW_TECHNICAL_EVIDENCE]"
+        )
+    return result
+
+def run_team_batches(modules, tickers, account_data, max_workers=ROLE_MAX_WORKERS):
+    tickers = list(dict.fromkeys(tickers or []))
+    results = {}
+    jobs = {}
+    roles = [("crow", "🐦 김선달"), ("snake", "🐍 이묵"), ("raccoon", "🦝 너부리"), ("turtle", "🐢 현무")]
+
+    executor = ThreadPoolExecutor(max_workers=min(max_workers, len(roles)))
+    try:
+        for role, name in roles:
+            module = modules.get(role)
+            if module is None:
+                results[role] = None
+                continue
+            jobs[executor.submit(run_role_batch, module, role, tickers, account_data)] = (role, name)
+
+        pending = dict(jobs)
+        while pending:
+            completed = []
+            for future, meta in list(pending.items()):
+                role, name = meta
+                try:
+                    results[role] = future.result(timeout=ROLE_TIMEOUT_SECONDS)
+                    print(f"✅ {name} 통합 분석 완료")
+                except TimeoutError:
+                    print(f"⏱️ {name} 분석 시간 초과 ({ROLE_TIMEOUT_SECONDS}초) → 해당 팀원 실패 처리")
+                    results[role] = None
+                except Exception as exc:
+                    print(f"❌ {name} 분석 실패: {type(exc).__name__}: {exc}")
+                    results[role] = None
+                completed.append(future)
+            for future in completed:
+                pending.pop(future, None)
+
+    finally:
+        # 이미 timeout/실패 처리된 작업을 메인 분석을 막지 않도록 한다.
+        executor.shutdown(wait=False, cancel_futures=True)
+
+    cache = cache_stats()
+    success_count = sum(1 for value in results.values() if isinstance(value, str) and value.strip())
+    failed_roles = [ROLE_CONFIG[key]["name"] for key, value in results.items() if not (isinstance(value, str) and value.strip())]
+    print(f"📦 데이터 캐시: hit {cache['hits']} / miss {cache['misses']}")
+    print(f"📊 팀 분석 상태: {success_count}/4 성공" + (f" | 실패: {', '.join(failed_roles)}" if failed_roles else ""))
+    return results
+mport inspect
+import json
+import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import lru_cache
+
+from ai.data_cache import get_or_fetch, stats as cache_stats
+from ai import technical_feed
+
+ROLE_CONFIG = {
+    "crow": {"name": "🐦 김선달", "prompt_ticker": "target_ticker"},
+    "snake": {"name": "🐍 이묵", "prompt_ticker": "ticker"},
+    "raccoon": {"name": "🦝 너부리", "prompt_ticker": "target_ticker"},
+    "turtle": {"name": "🐢 현무", "prompt_ticker": "ticker"},
+}
+DATA_MAX_WORKERS = 6
+ROLE_MAX_WORKERS = 4
+ROLE_TIMEOUT_SECONDS = 90
 
 def _json(data):
     return json.dumps(data, ensure_ascii=False, indent=2, default=str)
