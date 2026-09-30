@@ -216,7 +216,7 @@ class MainWindow(QMainWindow):
         q=self.input.text().strip()
         if not q or self.thread is not None: return
         self.meeting_started_at=time.time(); self.office.characters.summon_for_question(overtime=True); self.office.update()
-        self.button.setEnabled(False); self.progress.show(); self.progress.setRange(0,100); self.progress.setValue(5)
+        self.button.setEnabled(False); self.progress.show(); self.progress.setRange(0,0); self.progress.setValue(0)
         self._reset_team_status(); self.meeting.set_status('⚔ AI TRADING TEAM 회의 시작','긴급 호출 · 전원이 출입문으로 출근하는 중...')
         self.result.show_waiting(); self.status.setText('⚔️ AI TRADING TEAM 회의 진행 중...')
         self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(self.on_output); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(self.analysis_done); self.thread.start()
