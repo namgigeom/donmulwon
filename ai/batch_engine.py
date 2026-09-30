@@ -1,7 +1,7 @@
 import inspect
 import json
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from functools import lru_cache
 
 from ai.data_cache import get_or_fetch, stats as cache_stats
@@ -205,23 +205,24 @@ def run_team_batches(modules, tickers, account_data, max_workers=ROLE_MAX_WORKER
                 continue
             jobs[executor.submit(run_role_batch, module, role, tickers, account_data)] = (role, name)
 
-        pending = dict(jobs)
-        while pending:
-            completed = []
-            for future, meta in list(pending.items()):
-                role, name = meta
-                try:
-                    results[role] = future.result(timeout=ROLE_TIMEOUT_SECONDS)
-                    print(f"✅ {name} 통합 분석 완료")
-                except TimeoutError:
-                    print(f"⏱️ {name} 분석 시간 초과 ({ROLE_TIMEOUT_SECONDS}초) → 해당 팀원 실패 처리")
-                    results[role] = None
-                except Exception as exc:
-                    print(f"❌ {name} 분석 실패: {type(exc).__name__}: {exc}")
-                    results[role] = None
-                completed.append(future)
-            for future in completed:
-                pending.pop(future, None)
+        pending = set(jobs)
+    done, not_done = wait(pending, timeout=ROLE_TIMEOUT_SECONDS)
+
+    for future in done:
+        role, name = jobs[future]
+        try:
+            results[role] = future.result()
+            print(f"✅ {name} 통합 분석 완료")
+        except Exception as exc:
+            print(f"❌ {name} 분석 실패: {type(exc).__name__}: {exc}")
+            results[role] = None
+
+    for future in not_done:
+        role, name = jobs[future]
+        future.cancel()
+        results[role] = None
+        print(f"⏱️ {name} 분석 시간 초과 ({ROLE_TIMEOUT_SECONDS}초) → 해당 팀원 실패 처리")
+
 
     finally:
         # 이미 timeout/실패 처리된 작업을 메인 분석을 막지 않도록 한다.
