@@ -32,8 +32,8 @@ OPENROUTER_FALLBACK_MODEL = os.getenv(
 GEMINI_MAX_RETRIES = 0
 OPENROUTER_MAX_RETRIES = 1
 GEMINI_TIMEOUT_SECONDS = 25
-OPENROUTER_TIMEOUT_SECONDS = 20
-OPENAI_TIMEOUT_SECONDS = 30
+OPENROUTER_TIMEOUT_SECONDS = 8
+OPENAI_TIMEOUT_SECONDS = 20
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 
 _gemini_client = (genai.Client(api_key=GEMINI_API_KEY, http_options={"timeout": GEMINI_TIMEOUT_SECONDS * 1000}) if GEMINI_API_KEY else None)
@@ -298,7 +298,24 @@ def generate_content(
                 time.sleep(1)
 
     # --------------------------------------------------------
-    # 2. Gemini 실패 → 즉시 OpenRouter
+    # 2. Gemini 실패 → OpenAI 우선 fallback
+    #    속도를 위해 느린 무료 OpenRouter보다 먼저 시도한다.
+    # --------------------------------------------------------
+    openai_error = None
+    if OPENAI_API_KEY:
+        try:
+            print(f"🔵 Gemini 실패 → OpenAI 우선 fallback: {OPENAI_MODEL}")
+            result = _openai_generate(prompt=prompt, config=config)
+            print(f"🟢 OpenAI 사용: {OPENAI_MODEL}")
+            return result
+        except Exception as exc:
+            openai_error = exc
+            print(f"⚠️ OpenAI fallback 실패: {type(exc).__name__}: {exc}")
+    else:
+        openai_error = AIRouterError("OPENAI_API_KEY가 없습니다.")
+
+    # --------------------------------------------------------
+    # 3. OpenAI 실패 → OpenRouter 최후 fallback
     # --------------------------------------------------------
     selected_model = (
         OPENROUTER_DEBATE_MODEL
@@ -306,13 +323,9 @@ def generate_content(
         else OPENROUTER_MODEL
     )
 
-    if GEMINI_API_KEY:
-        print("🟡 Gemini 실패/한도 감지 → OpenRouter 자동 전환")
-    else:
-        print("🟡 GEMINI_API_KEY 없음 → OpenRouter 사용")
+    print("🟡 OpenAI 실패 → OpenRouter 최후 fallback")
 
     openrouter_error = None
-
     router_models = [selected_model]
     if OPENROUTER_FALLBACK_MODEL and OPENROUTER_FALLBACK_MODEL not in router_models:
         router_models.append(OPENROUTER_FALLBACK_MODEL)
@@ -328,6 +341,15 @@ def generate_content(
                 text = getattr(result, "text", "")
                 if not isinstance(text, str) or not text.strip():
                     raise AIRouterError("OpenRouter 응답 텍스트가 비어 있습니다.")
+                print(f"🟢 OpenRouter 사용: {selected}")
+                return result
+            except Exception as exc:
+                openrouter_error = exc
+                print(f"⚠️ OpenRouter 실패: {selected} / {type(exc).__name__}: {exc}")
+                if attempt < OPENROUTER_MAX_RETRIES:
+                    time.sleep(1)
+
+    raise AIRouterError("OpenRouter 응답 텍스트가 비어 있습니다.")
                 print(f"🟢 OpenRouter 사용: {selected}")
                 return result
             except Exception as exc:
