@@ -103,7 +103,17 @@ def run_meeting(parsed,modules,account_data):
     print(f"⏱️ 4인 독립 분석 완료 ({elapsed:.1f}초) | 성공 {len(success_roles)}/4")
     if not success_roles:
         set_gui_state("error")
-        raise RuntimeError("4명 전문 AI가 모두 응답하지 못했습니다. Gemini/OpenRouter와 데이터 공급원을 확인하세요.")
+        details = []
+        for key, value in team_results.items():
+            if isinstance(value, str) and value.strip():
+                continue
+            details.append(f"{key}=실패(콘솔 로그에서 Gemini/OpenRouter/OpenAI 원인 확인)")
+        detail_text = ", ".join(details) if details else "실패 원인 미상"
+        raise RuntimeError(
+            "4명 전문 AI가 모두 응답하지 못했습니다. "
+            f"역할별 상태: {detail_text}. "
+            "각 역할의 콘솔 로그에서 최종 fallback 오류를 확인하세요."
+        )
     # Keep the team physically in the meeting while the debate runs.
     set_gui_state("meeting")
     try:
