@@ -6,6 +6,7 @@ from functools import lru_cache
 
 from ai.data_cache import get_or_fetch, stats as cache_stats
 from ai import technical_feed
+from ai.technical_preprocessor import build_snake_prompt_data
 
 ROLE_CONFIG = {
     "crow": {"name": "🐦 김선달", "prompt_ticker": "target_ticker"},
@@ -15,7 +16,7 @@ ROLE_CONFIG = {
 }
 DATA_MAX_WORKERS = 6
 ROLE_MAX_WORKERS = 4
-ROLE_TIMEOUT_SECONDS = 90
+ROLE_TIMEOUT_SECONDS = 45
 
 def _json(data):
     return json.dumps(data, ensure_ascii=False, indent=2, default=str)
@@ -136,10 +137,25 @@ def run_role_batch(module, role, tickers, account_data):
     function = getattr(module, function_name, None)
     if not callable(function):
         raise RuntimeError(f"{role}의 {function_name} 함수를 찾지 못했습니다.")
+    print(f"[PROGRESS 10] {ROLE_CONFIG[role]["name"]} 자료조사 시작")
     print(f"⏳ {ROLE_CONFIG[role]["name"]} 데이터 수집 시작: {", ".join(tickers) if tickers else "MARKET"}")
     data = _collect_role_data(module, role, tickers, account_data)
+    print(f"[PROGRESS 25] {ROLE_CONFIG[role]["name"]} 자료조사 완료")
     print(f"📦 {ROLE_CONFIG[role]["name"]} 데이터 수집 완료")
-    data_text = _json(data)
+    if role == "snake":
+        prompt_data = dict(data)
+        prompt_data["technical_brief"] = build_snake_prompt_data(data.get("stocks", {}))
+        compact = {}
+        for symbol, stock in (data.get("stocks", {}) or {}).items():
+            if isinstance(stock, dict):
+                compact_stock = dict(stock)
+                compact_stock["chart_data"] = (compact_stock.get("chart_data") or [])[-60:]
+                compact_stock["chart_data_bars"] = len(compact_stock["chart_data"])
+                compact[symbol] = compact_stock
+        prompt_data["stocks"] = compact
+        data_text = _json(prompt_data)
+    else:
+        data_text = _json(data)
     ticker_label = ", ".join(tickers) if tickers else "MARKET / PORTFOLIO"
     prompt = _render_prompt(_extract_prompt(function), ticker_label, data_text)
     prompt += f"""
@@ -164,13 +180,16 @@ def run_role_batch(module, role, tickers, account_data):
     router = getattr(module, "ai_router", None)
     if router is None or not hasattr(router, "generate_content"):
         raise RuntimeError(f"{role}의 ai_router를 찾지 못했습니다.")
+    print(f"[PROGRESS 30] {ROLE_CONFIG[role]["name"]} AI 분석 시작")
     print(f"🤖 {ROLE_CONFIG[role]["name"]} AI 분석 요청 시작")
     response = router.generate_content(model="gemini-3.6-flash", contents=prompt)
+    print(f"[PROGRESS 45] {ROLE_CONFIG[role]["name"]} AI 분석 응답 수신")
     print(f"🤖 {ROLE_CONFIG[role]["name"]} AI 분석 응답 수신")
     result = getattr(response, "text", str(response))
     if not isinstance(result, str) or not result.strip():
         raise RuntimeError(f"{ROLE_CONFIG[role]['name']} AI 응답이 비어 있습니다.")
     result = result.strip()
+    print(f"[PROGRESS 50] {ROLE_CONFIG[role]["name"]} 분석 정리 완료")
 
     # 기술 데이터는 LLM의 서술에만 의존하지 않고 최종 검증 단계까지 전달한다.
     # chart_data(60개 캔들)는 제외하고 핵심 지표 원본만 첨부해 토큰 낭비를 줄인다.
@@ -196,6 +215,7 @@ def run_team_batches(modules, tickers, account_data, max_workers=ROLE_MAX_WORKER
     jobs = {}
     roles = [("crow", "🐦 김선달"), ("snake", "🐍 이묵"), ("raccoon", "🦝 너부리"), ("turtle", "🐢 현무")]
 
+    print("[PROGRESS 5] 4명 전문 AI 병렬 분석 시작")
     executor = ThreadPoolExecutor(max_workers=min(max_workers, len(roles)))
     try:
         for role, name in roles:
@@ -213,6 +233,7 @@ def run_team_batches(modules, tickers, account_data, max_workers=ROLE_MAX_WORKER
             try:
                 results[role] = future.result()
                 print(f"✅ {name} 통합 분석 완료")
+                print(f"[PROGRESS 55] {name} 통합 분석 완료")
             except Exception as exc:
                 print(f"❌ {name} 분석 실패: {type(exc).__name__}: {exc}")
                 results[role] = None
@@ -222,6 +243,7 @@ def run_team_batches(modules, tickers, account_data, max_workers=ROLE_MAX_WORKER
             future.cancel()
             results[role] = None
             print(f"⏱️ {name} 분석 시간 초과 ({ROLE_TIMEOUT_SECONDS}초) → 해당 팀원 실패 처리")
+            print(f"[PROGRESS 55] {name} 시간 초과 처리")
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
 
