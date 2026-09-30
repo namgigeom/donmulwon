@@ -338,14 +338,16 @@ def analyze(
         # 기존 포트폴리오 파일
         # ====================================================
 
-        "portfolio_file":
+        "legacy_portfolio_file":
             portfolio_file_data,
 
         # legacy market_data.json은 이번 회의의 기술지표 원본이 아니다.
         # 기술적 판단은 아래 snake의 live RAW_TECHNICAL_EVIDENCE를 우선한다.
         "legacy_market_data": market,
 
-        "news_data": news,
+        "legacy_news_data": news,
+
+        "live_fundamental_news": team["crow"]["content"],
 
         # 이번 회의에서 실제로 수집된 MA/RSI/MACD/ATR/OHLCV 증거
         "technical_evidence": team["snake"]["content"],
