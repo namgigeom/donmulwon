@@ -23,6 +23,10 @@ OPENROUTER_DEBATE_MODEL = os.getenv(
     "OPENROUTER_DEBATE_MODEL",
     "nvidia/nemotron-3.5-lightning:free"
 )
+OPENROUTER_FALLBACK_MODEL = os.getenv(
+    "OPENROUTER_FALLBACK_MODEL",
+    "openrouter/free"
+)
 
 GEMINI_MAX_RETRIES = 0
 OPENROUTER_MAX_RETRIES = 1
@@ -230,9 +234,10 @@ def generate_content(
                 config=config,
                 model=model,
             )
-            print(
-                f"🟢 Gemini 사용: {model or GEMINI_MODEL}"
-            )
+            gemini_text = getattr(result, "text", "")
+            if not isinstance(gemini_text, str) or not gemini_text.strip():
+                raise AIRouterError("Gemini 응답 텍스트가 비어 있습니다.")
+            print(f"🟢 Gemini 사용: {model or GEMINI_MODEL}")
             return result
 
         except Exception as exc:
@@ -258,23 +263,28 @@ def generate_content(
 
     openrouter_error = None
 
-    for attempt in range(OPENROUTER_MAX_RETRIES + 1):
-        try:
-            result = _openrouter_generate(
-                prompt=prompt,
-                config=config,
-                model=None,
-            )
-            print(
-                f"🟢 OpenRouter 사용: {selected_model}"
-            )
-            return result
+    router_models = [selected_model]
+    if OPENROUTER_FALLBACK_MODEL and OPENROUTER_FALLBACK_MODEL not in router_models:
+        router_models.append(OPENROUTER_FALLBACK_MODEL)
 
-        except Exception as exc:
-            openrouter_error = exc
-
-            if attempt < OPENROUTER_MAX_RETRIES:
-                time.sleep(2)
+    for selected in router_models:
+        for attempt in range(OPENROUTER_MAX_RETRIES + 1):
+            try:
+                result = _openrouter_generate(
+                    prompt=prompt,
+                    config=config,
+                    model=selected,
+                )
+                text = getattr(result, "text", "")
+                if not isinstance(text, str) or not text.strip():
+                    raise AIRouterError("OpenRouter 응답 텍스트가 비어 있습니다.")
+                print(f"🟢 OpenRouter 사용: {selected}")
+                return result
+            except Exception as exc:
+                openrouter_error = exc
+                print(f"⚠️ OpenRouter 실패: {selected} / {type(exc).__name__}: {exc}")
+                if attempt < OPENROUTER_MAX_RETRIES:
+                    time.sleep(1)
 
     raise AIRouterError(
         "Gemini 실패: "
