@@ -81,6 +81,8 @@ def run_meeting(parsed,modules,account_data):
     from ai.batch_engine import run_team_batches
     from ai.data_cache import clear as clear_data_cache
     clear_data_cache()
+    set_gui_state("collect")
+    print("[PROGRESS 3] 계좌/시장 데이터 준비")
     tickers = list(dict.fromkeys(parsed.get("tickers", []) or []))
     if not tickers:
         try:
@@ -98,6 +100,7 @@ def run_meeting(parsed,modules,account_data):
     print("\n"+"="*70); print("⚔️ AI TRADING TEAM 회의"); print("="*70); print("🎯 분석 대상:",", ".join(tickers) if tickers else "전체 시장 / 포트폴리오"); print("⚡ 4명 독립 분석: 역할별 1회 호출 + 병렬 실행")
     started=time.time()
     team_results=run_team_batches(modules,tickers,account_data,max_workers=4)
+    print("[PROGRESS 60] 4명 독립 분석 종료")
     elapsed = time.time()-started
     success_roles = [key for key, value in team_results.items() if isinstance(value, str) and value.strip()]
     print(f"⏱️ 4인 독립 분석 완료 ({elapsed:.1f}초) | 성공 {len(success_roles)}/4")
@@ -116,15 +119,18 @@ def run_meeting(parsed,modules,account_data):
         )
     # Keep the team physically in the meeting while the debate runs.
     set_gui_state("meeting")
+    print("[PROGRESS 65] ⚔️ 통합 회의 시작")
     try:
         debate_module=importlib.import_module("ai.debate"); print("\n⚔️ 4인 통합 토론 시작 (1회)")
         debate_started=time.time(); debate_result=debate_module.run_debate(modules=modules,parsed=parsed,account_data=account_data,team_results=team_results); print(f"⏱️ 통합 토론 완료 ({time.time()-debate_started:.1f}초)")
+        print("[PROGRESS 80] ⚔️ 통합 회의 완료")
     except Exception as e:
         print(f"❌ 통합 토론 오류: {type(e).__name__}: {e}"); debate_result={"initial_results":team_results,"final_positions":{},"meeting_summary":"","conflicts":[],"consensus":[],"important_corrections":[],"transcript":"","error":str(e)}
     package={"request":parsed,"account_data":account_data,"team_results":team_results,"debate":debate_result,"timestamp":datetime.now().isoformat()}; save_meeting_file("team_meeting",package)
     cat_result=None; cat=modules.get("cat")
     if cat is not None and callable(getattr(cat,"analyze",None)):
-        set_gui_state("verdict"); print("\n🐱 알프레도 최종 검증 시작 (1회)"); ticker_label=", ".join(tickers) if tickers else "전체 시장 / 포트폴리오"; cat_filename_label=re.sub(r'[<>:"/\\|?*]','_',ticker_label).strip(" .") or "MARKET"
+        set_gui_state("verdict"); print("[PROGRESS 85] 🐱 알프레도 최종 검증 시작")
+        print("\n🐱 알프레도 최종 검증 시작 (1회)"); ticker_label=", ".join(tickers) if tickers else "전체 시장 / 포트폴리오"; cat_filename_label=re.sub(r'[<>:"/\\|?*]','_',ticker_label).strip(" .") or "MARKET"
         instruction=f"""
 [최종 사용자 화면 출력 규칙]
 너는 돈물원 트레이딩 팀의 최종 팀장이다.
@@ -149,6 +155,7 @@ def run_meeting(parsed,modules,account_data):
                 cat_result=cat.analyze(question=parsed["question"]+"\\n\\n"+retry_instruction,ticker=cat_filename_label,team_analyses=team_for_cat,account_context=account_data)
                 cat_result=normalize_result(cat_result).strip()
             print(f"⏱️ 알프레도 검증 완료 ({time.time()-cat_started:.1f}초)")
+            print("[PROGRESS 95] 🐱 알프레도 검증 완료")
         except Exception as e:
             print(f"❌ 알프레도 오류: {type(e).__name__}: {e}")
             cat_result=""
@@ -165,6 +172,7 @@ def run_meeting(parsed,modules,account_data):
         )
     final_data={**package,"alfredo":alfredo_text}; final_path=save_meeting_file("final_meeting",final_data)
     print("\n"+"━"*70); print("🐱 알프레도 최종 판단"); print("━"*70); print(alfredo_text); print("━"*70); print(f"💾 최종 회의록: {final_path}")
+    print("[PROGRESS 100] 분석 파이프라인 완료")
     set_gui_state("return")
     return final_data
 
