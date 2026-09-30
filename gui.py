@@ -176,7 +176,7 @@ class MainWindow(QMainWindow):
         self.status=QLabel('대기 중 · 실제 시각 기준 사무실 상태 유지'); layout.addWidget(self.status)
         self.progress=QProgressBar(); self.progress.setRange(0,100); self.progress.setValue(0); self.progress.hide(); layout.addWidget(self.progress)
         self.meeting=MeetingLogPanel(); self.meeting.set_status('대기 중','분석을 시작하면 전원이 출입문에서 회의실로 이동합니다.'); layout.addWidget(self.meeting)
-        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setFixedHeight(72); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:5px;color:#bfb6a6;overflow:hidden;}'); layout.addWidget(self.team_status)
+        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setFixedHeight(72); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:5px;color:#bfb6a6;}'); layout.addWidget(self.team_status)
         self._reset_team_status()
         self.result=ResultPanel(); self.result.show_waiting(); layout.addWidget(self.result)
         self.setCentralWidget(root); self.thread=None; self.worker=None; self.meeting_started_at=0.0
@@ -238,8 +238,11 @@ class MainWindow(QMainWindow):
             clean=text.strip()
             if clean:
                 line=clean.splitlines()[-1].strip()
+                progress_match=re.search(r'\\[PROGRESS\\s+(\\d+)\\]', line)
+                if progress_match:
+                    self.progress.setValue(max(0, min(100, int(progress_match.group(1)))))
                 stage='회의 진행 중'
-                detail=line
+                detail=re.sub(r'\\[PROGRESS\\s+\\d+\\]\\s*', '', line)
                 role_map={'🐦 김선달':'🐦 김선달','🐍 이묵':'🐍 이묵','🦝 너부리':'🦝 너부리','🐢 현무':'🐢 현무'}
                 for key,label in role_map.items():
                     if key in line:
@@ -252,6 +255,9 @@ class MainWindow(QMainWindow):
                         break
                 if 'OpenRouter' in line: stage='🌐 OpenRouter · 응답 대기 중'
                 elif 'Gemini' in line: stage='🤖 Gemini · 응답 대기 중'
+                elif '통합 회의 시작' in line or '통합 토론 시작' in line:
+                    stage='⚔️ AI TRADING TEAM · 회의중'
+                    for name in ['현무','김선달','이묵','너부리','알프레도']: self._set_team_state(name,'회의중')
                 elif '알프레도' in line: stage='🐱 알프레도 · 최종 검증 중'
                 self.status.setText(f'⚔️ {stage}')
                 self.meeting.set_status(f'⚔️ AI TRADING TEAM · {stage}',detail[-220:])
@@ -262,7 +268,8 @@ class MainWindow(QMainWindow):
                         elif '데이터 수집' in line: self._set_team_state(name,'자료조사중')
                         elif 'AI 분석' in line: self._set_team_state(name,'분석중')
                         else: self._set_team_state(name,'작업중')
-                self.progress.setValue(min(95, max(8, self.progress.value()+1)))
+                if not progress_match:
+                    self.progress.setValue(min(95, max(8, self.progress.value()+1)))
         self.office.update()
 
     def _show_result_after_verdict(self,text):
