@@ -13,6 +13,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
@@ -32,6 +33,8 @@ GEMINI_MAX_RETRIES = 0
 OPENROUTER_MAX_RETRIES = 1
 GEMINI_TIMEOUT_SECONDS = 25
 OPENROUTER_TIMEOUT_SECONDS = 20
+OPENAI_TIMEOUT_SECONDS = 30
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 
 _gemini_client = (genai.Client(api_key=GEMINI_API_KEY, http_options={"timeout": GEMINI_TIMEOUT_SECONDS * 1000}) if GEMINI_API_KEY else None)
 
@@ -188,6 +191,53 @@ def _openrouter_generate(prompt, config=None, model=None):
     return SimpleNamespace(text=text)
 
 
+def _openai_generate(prompt, config=None, model=None):
+    if not OPENAI_API_KEY:
+        raise AIRouterError("OPENAI_API_KEY가 없습니다.")
+
+    selected_model = model or OPENAI_MODEL
+    payload = {"model": selected_model, "input": prompt}
+
+    if config is not None:
+        max_output_tokens = getattr(config, "max_output_tokens", None)
+        if max_output_tokens is not None:
+            payload["max_output_tokens"] = int(max_output_tokens)
+
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/responses",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=OPENAI_TIMEOUT_SECONDS) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise AIRouterError(f"OpenAI HTTP {exc.code}: {detail[:500]}")
+    except Exception as exc:
+        raise AIRouterError(f"OpenAI 요청 실패: {exc}")
+
+    text = data.get("output_text", "")
+    if not text:
+        parts = []
+        for item in data.get("output", []) or []:
+            for content in item.get("content", []) or []:
+                if content.get("type") == "output_text" and content.get("text"):
+                    parts.append(content["text"])
+        text = "".join(parts)
+
+    if not text.strip():
+        raise AIRouterError(f"OpenAI 응답 텍스트가 비어 있습니다. (model={selected_model})")
+
+    return SimpleNamespace(text=text)
+
+
 def generate_content(
     prompt=None,
     config=None,
@@ -286,9 +336,25 @@ def generate_content(
                 if attempt < OPENROUTER_MAX_RETRIES:
                     time.sleep(1)
 
+    # --------------------------------------------------------
+    # 3. OpenAI 최종 fallback
+    # --------------------------------------------------------
+    if OPENAI_API_KEY:
+        try:
+            result = _openai_generate(prompt=prompt, config=config)
+            print(f"🟢 OpenAI 최종 fallback 사용: {OPENAI_MODEL}")
+            return result
+        except Exception as exc:
+            openai_error = exc
+            print(f"⚠️ OpenAI fallback 실패: {type(exc).__name__}: {exc}")
+    else:
+        openai_error = AIRouterError("OPENAI_API_KEY가 없습니다.")
+
     raise AIRouterError(
         "Gemini 실패: "
         f"{gemini_error}\n"
         "OpenRouter 실패: "
-        f"{openrouter_error}"
+        f"{openrouter_error}\n"
+        "OpenAI 실패: "
+        f"{openai_error}"
     )
