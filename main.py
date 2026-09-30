@@ -98,7 +98,12 @@ def run_meeting(parsed,modules,account_data):
     print("\n"+"="*70); print("⚔️ AI TRADING TEAM 회의"); print("="*70); print("🎯 분석 대상:",", ".join(tickers) if tickers else "전체 시장 / 포트폴리오"); print("⚡ 4명 독립 분석: 역할별 1회 호출 + 병렬 실행")
     started=time.time()
     team_results=run_team_batches(modules,tickers,account_data,max_workers=4)
-    print(f"⏱️ 4인 독립 분석 완료 ({time.time()-started:.1f}초)")
+    elapsed = time.time()-started
+    success_roles = [key for key, value in team_results.items() if isinstance(value, str) and value.strip()]
+    print(f"⏱️ 4인 독립 분석 완료 ({elapsed:.1f}초) | 성공 {len(success_roles)}/4")
+    if not success_roles:
+        set_gui_state("error")
+        raise RuntimeError("4명 전문 AI가 모두 응답하지 못했습니다. Gemini/OpenRouter와 데이터 공급원을 확인하세요.")
     # Keep the team physically in the meeting while the debate runs.
     set_gui_state("meeting")
     try:
