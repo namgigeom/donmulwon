@@ -12,183 +12,49 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
-
-# 토론은 호출 횟수가 많기 때문에 느린 무료 모델을 무작위로 고르지 않는다.
-# 독립 분석은 기존 openrouter/free를 유지하고, 재반박/토론은 빠른 무료 모델을 사용한다.
-OPENROUTER_DEBATE_MODEL = os.getenv(
-    "OPENROUTER_DEBATE_MODEL",
-    "nvidia/nemotron-3.5-lightning:free"
-)
-OPENROUTER_FALLBACK_MODEL = os.getenv(
-    "OPENROUTER_FALLBACK_MODEL",
-    "openrouter/free"
-)
-
-GEMINI_MAX_RETRIES = 0
-OPENROUTER_MAX_RETRIES = 1
-GEMINI_TIMEOUT_SECONDS = 25
-OPENROUTER_TIMEOUT_SECONDS = 8
-OPENAI_TIMEOUT_SECONDS = 20
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+OPENROUTER_DEBATE_MODEL = os.getenv("OPENROUTER_DEBATE_MODEL", "nvidia/nemotron-3.5-lightning:free")
+OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "openrouter/free")
 
-_gemini_client = (genai.Client(api_key=GEMINI_API_KEY, http_options={"timeout": GEMINI_TIMEOUT_SECONDS * 1000}) if GEMINI_API_KEY else None)
+# 속도 우선: 실패한 provider를 오래 붙잡지 않는다.
+GEMINI_TIMEOUT_SECONDS = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "15"))
+OPENAI_TIMEOUT_SECONDS = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "20"))
+OPENROUTER_TIMEOUT_SECONDS = int(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "8"))
+OPENROUTER_MAX_RETRIES = 0
+
+_gemini_client = (
+    genai.Client(
+        api_key=GEMINI_API_KEY,
+        http_options={"timeout": GEMINI_TIMEOUT_SECONDS * 1000},
+    )
+    if GEMINI_API_KEY else None
+)
 
 
 class AIRouterError(Exception):
     pass
 
 
+def _is_debate_prompt(prompt):
+    text = str(prompt or "")
+    return any(marker in text for marker in (
+        "ROUND 1", "ROUND 2", "재반박", "재발언", "첫 반박",
+        "반박", "토론", "다른 AI의 의견", "서로의 의견",
+    ))
+
+
 def _gemini_generate(prompt, config=None, model=None):
     if _gemini_client is None:
         raise AIRouterError("GEMINI_API_KEY가 없습니다.")
-
-    kwargs = {
-        "model": model or GEMINI_MODEL,
-        "contents": prompt,
-    }
-
+    kwargs = {"model": model or GEMINI_MODEL, "contents": prompt}
     if config is not None:
         kwargs["config"] = config
-
     return _gemini_client.models.generate_content(**kwargs)
-
-
-def _is_debate_prompt(prompt):
-    text = str(prompt or "")
-    markers = [
-        "ROUND 1",
-        "ROUND 2",
-        "재반박",
-        "재발언",
-        "첫 반박",
-        "반박",
-        "토론",
-        "다른 AI의 의견",
-        "서로의 의견",
-    ]
-    return any(marker in text for marker in markers)
-
-
-def _openrouter_generate(prompt, config=None, model=None):
-    if not OPENROUTER_API_KEY:
-        raise AIRouterError("OPENROUTER_API_KEY가 없습니다.")
-
-    selected_model = model or (
-        OPENROUTER_DEBATE_MODEL
-        if _is_debate_prompt(prompt)
-        else OPENROUTER_MODEL
-    )
-
-    payload = {
-        "model": selected_model,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are an AI investment analysis assistant. "
-                    "Answer in Korean unless explicitly requested otherwise."
-                ),
-            },
-            {
-                "role": "user",
-                "content": prompt,
-            },
-        ],
-        "temperature": 0.2,
-    }
-
-    if config is not None:
-        temperature = getattr(config, "temperature", None)
-        max_output_tokens = getattr(config, "max_output_tokens", None)
-
-        if temperature is not None:
-            payload["temperature"] = temperature
-
-        if max_output_tokens is not None:
-            # 토론 발언은 장문이 필요 없으므로 무료 모델에서 과도한 생성 방지.
-            if _is_debate_prompt(prompt):
-                payload["max_tokens"] = min(int(max_output_tokens), 1200)
-            else:
-                payload["max_tokens"] = max_output_tokens
-
-    body = json.dumps(payload).encode("utf-8")
-
-    request = urllib.request.Request(
-        "https://openrouter.ai/api/v1/chat/completions",
-        data=body,
-        headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/namgigeom/donmulwon",
-            "X-Title": "Donmulwon AI Trading Team",
-        },
-        method="POST",
-    )
-
-    try:
-        with urllib.request.urlopen(
-            request,
-            timeout=OPENROUTER_TIMEOUT_SECONDS
-        ) as response:
-            data = json.loads(
-                response.read().decode("utf-8")
-            )
-
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore")
-        raise AIRouterError(
-            f"OpenRouter HTTP {exc.code}: {detail[:500]}"
-        )
-
-    except Exception as exc:
-        raise AIRouterError(
-            f"OpenRouter 요청 실패: {exc}"
-        )
-
-    choices = data.get("choices", [])
-
-    if not choices:
-        raise AIRouterError(
-            "OpenRouter 응답에 choices가 없습니다."
-        )
-
-    message = choices[0].get("message", {})
-    text = message.get("content", "")
-
-    if isinstance(text, list):
-        text = "".join(
-            item.get("text", "")
-            for item in text
-            if isinstance(item, dict)
-        )
-
-    # 일부 OpenRouter 모델은 content를 비워 두고 reasoning만 반환하거나
-    # content를 배열/비표준 형태로 반환할 수 있다. 이 경우 실제 표시 가능한
-    # 텍스트를 최대한 복구한 뒤, 그래도 비어 있으면 호출자가 재시도할 수 있게 오류를 낸다.
-    if not text:
-        reasoning = message.get("reasoning", "")
-        if isinstance(reasoning, list):
-            reasoning = "".join(
-                item.get("text", "") if isinstance(item, dict) else str(item)
-                for item in reasoning
-            )
-        if reasoning:
-            text = str(reasoning)
-
-    if not text:
-        finish_reason = choices[0].get("finish_reason")
-        provider = data.get("provider")
-        raise AIRouterError(
-            "OpenRouter 응답 텍스트가 비어 있습니다."
-            f" (model={selected_model}, provider={provider}, finish_reason={finish_reason})"
-        )
-
-    return SimpleNamespace(text=text)
 
 
 def _openai_generate(prompt, config=None, model=None):
@@ -203,10 +69,9 @@ def _openai_generate(prompt, config=None, model=None):
         if max_output_tokens is not None:
             payload["max_output_tokens"] = int(max_output_tokens)
 
-    body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         "https://api.openai.com/v1/responses",
-        data=body,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={
             "Authorization": f"Bearer {OPENAI_API_KEY}",
             "Content-Type": "application/json",
@@ -219,164 +84,141 @@ def _openai_generate(prompt, config=None, model=None):
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore")
-        raise AIRouterError(f"OpenAI HTTP {exc.code}: {detail[:500]}")
+        raise AIRouterError(f"OpenAI HTTP {exc.code}: {detail[:400]}")
     except Exception as exc:
-        raise AIRouterError(f"OpenAI 요청 실패: {exc}")
+        raise AIRouterError(f"OpenAI 요청 실패: {type(exc).__name__}: {exc}")
 
     text = data.get("output_text", "")
     if not text:
         parts = []
         for item in data.get("output", []) or []:
-            for content in item.get("content", []) or []:
-                if content.get("type") == "output_text" and content.get("text"):
-                    parts.append(content["text"])
+            for item_content in item.get("content", []) or []:
+                if isinstance(item_content, dict) and item_content.get("type") == "output_text":
+                    if item_content.get("text"):
+                        parts.append(item_content["text"])
         text = "".join(parts)
 
-    if not text.strip():
+    if not isinstance(text, str) or not text.strip():
         raise AIRouterError(f"OpenAI 응답 텍스트가 비어 있습니다. (model={selected_model})")
 
-    return SimpleNamespace(text=text)
+    return SimpleNamespace(text=text.strip())
 
 
-def generate_content(
-    prompt=None,
-    config=None,
-    model=None,
-    contents=None,
-):
-    """
-    Gemini 우선 → Gemini 실패 시 즉시 OpenRouter fallback.
+def _openrouter_generate(prompt, config=None, model=None):
+    if not OPENROUTER_API_KEY:
+        raise AIRouterError("OPENROUTER_API_KEY가 없습니다.")
 
-    독립 분석:
-        OPENROUTER_MODEL
+    selected_model = model or (
+        OPENROUTER_DEBATE_MODEL if _is_debate_prompt(prompt) else OPENROUTER_MODEL
+    )
+    payload = {
+        "model": selected_model,
+        "messages": [
+            {"role": "system", "content": "Answer in Korean. Be concise and evidence-based."},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
+    }
 
-    토론/재반박:
-        OPENROUTER_DEBATE_MODEL
+    if config is not None:
+        temperature = getattr(config, "temperature", None)
+        max_output_tokens = getattr(config, "max_output_tokens", None)
+        if temperature is not None:
+            payload["temperature"] = temperature
+        if max_output_tokens is not None:
+            payload["max_tokens"] = min(int(max_output_tokens), 1400 if _is_debate_prompt(prompt) else int(max_output_tokens))
 
-    기존 Google SDK 스타일의 다음 호출 형식을 모두 지원한다.
-        generate_content(model="gemini-3.6-flash", contents=prompt)
-        generate_content(prompt, config=config)
-    """
+    request = urllib.request.Request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/namgigeom/donmulwon",
+            "X-Title": "Donmulwon AI Trading Team",
+        },
+        method="POST",
+    )
 
-    if prompt is None:
-        prompt = contents
+    try:
+        with urllib.request.urlopen(request, timeout=OPENROUTER_TIMEOUT_SECONDS) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise AIRouterError(f"OpenRouter HTTP {exc.code}: {detail[:400]}")
+    except Exception as exc:
+        raise AIRouterError(f"OpenRouter 요청 실패: {type(exc).__name__}: {exc}")
 
-    if prompt is None:
+    choices = data.get("choices") or []
+    if not choices:
+        raise AIRouterError("OpenRouter 응답에 choices가 없습니다.")
+
+    message = choices[0].get("message") or {}
+    text = message.get("content", "")
+    if isinstance(text, list):
+        text = "".join(item.get("text", "") for item in text if isinstance(item, dict))
+
+    if not text:
+        reasoning = message.get("reasoning", "")
+        if isinstance(reasoning, list):
+            reasoning = "".join(item.get("text", "") if isinstance(item, dict) else str(item) for item in reasoning)
+        text = reasoning
+
+    if not isinstance(text, str) or not text.strip():
         raise AIRouterError(
-            "분석 프롬프트(contents)가 없습니다."
+            "OpenRouter 응답 텍스트가 비어 있습니다. "
+            f"(model={selected_model}, provider={data.get('provider')}, finish_reason={choices[0].get('finish_reason')})"
         )
 
-    # --------------------------------------------------------
-    # 1. Gemini (키가 있을 때만 시도)
-    # --------------------------------------------------------
-    gemini_error = None
+    return SimpleNamespace(text=text.strip())
+
+
+def generate_content(prompt=None, config=None, model=None, contents=None):
+    """Gemini → OpenAI → OpenRouter 순서의 짧은 timeout fallback."""
+    prompt = prompt if prompt is not None else contents
+    if prompt is None:
+        raise AIRouterError("분석 프롬프트(contents)가 없습니다.")
+
+    errors = []
 
     if GEMINI_API_KEY:
-        gemini_attempts = range(GEMINI_MAX_RETRIES + 1)
-    else:
-        gemini_attempts = []
-
-    for attempt in gemini_attempts:
         try:
-            print(f"⏳ Gemini 요청 시작: {model or GEMINI_MODEL} (timeout {GEMINI_TIMEOUT_SECONDS}초)")
-            result = _gemini_generate(
-                prompt=prompt,
-                config=config,
-                model=model,
-            )
-            gemini_text = getattr(result, "text", "")
-            if not isinstance(gemini_text, str) or not gemini_text.strip():
-                raise AIRouterError("Gemini 응답 텍스트가 비어 있습니다.")
-            print(f"🟢 Gemini 사용: {model or GEMINI_MODEL}")
-            return result
-
+            print(f"⏳ Gemini 요청 시작: {model or GEMINI_MODEL} ({GEMINI_TIMEOUT_SECONDS}s)")
+            result = _gemini_generate(prompt, config=config, model=model)
+            text = getattr(result, "text", "")
+            if isinstance(text, str) and text.strip():
+                print(f"🟢 Gemini 사용: {model or GEMINI_MODEL}")
+                return result
+            raise AIRouterError("Gemini 응답 텍스트가 비어 있습니다.")
         except Exception as exc:
-            gemini_error = exc
-            print(f"⚠️ Gemini 호출 실패/timeout → OpenRouter fallback: {type(exc).__name__}: {exc}")
+            errors.append(f"Gemini={type(exc).__name__}: {exc}")
+            print(f"⚠️ Gemini 실패 → OpenAI fallback: {exc}")
 
-            if attempt < GEMINI_MAX_RETRIES:
-                time.sleep(1)
-
-    # --------------------------------------------------------
-    # 2. Gemini 실패 → OpenAI 우선 fallback
-    #    속도를 위해 느린 무료 OpenRouter보다 먼저 시도한다.
-    # --------------------------------------------------------
-    openai_error = None
     if OPENAI_API_KEY:
         try:
-            print(f"🔵 Gemini 실패 → OpenAI 우선 fallback: {OPENAI_MODEL}")
-            result = _openai_generate(prompt=prompt, config=config)
+            print(f"🔵 OpenAI fallback 시작: {OPENAI_MODEL} ({OPENAI_TIMEOUT_SECONDS}s)")
+            result = _openai_generate(prompt, config=config)
             print(f"🟢 OpenAI 사용: {OPENAI_MODEL}")
             return result
         except Exception as exc:
-            openai_error = exc
-            print(f"⚠️ OpenAI fallback 실패: {type(exc).__name__}: {exc}")
-    else:
-        openai_error = AIRouterError("OPENAI_API_KEY가 없습니다.")
+            errors.append(f"OpenAI={type(exc).__name__}: {exc}")
+            print(f"⚠️ OpenAI 실패 → OpenRouter fallback: {exc}")
 
-    # --------------------------------------------------------
-    # 3. OpenAI 실패 → OpenRouter 최후 fallback
-    # --------------------------------------------------------
-    selected_model = (
-        OPENROUTER_DEBATE_MODEL
-        if _is_debate_prompt(prompt)
-        else OPENROUTER_MODEL
-    )
+    if OPENROUTER_API_KEY:
+        models = []
+        selected = OPENROUTER_DEBATE_MODEL if _is_debate_prompt(prompt) else OPENROUTER_MODEL
+        for candidate in (selected, OPENROUTER_FALLBACK_MODEL):
+            if candidate and candidate not in models:
+                models.append(candidate)
 
-    print("🟡 OpenAI 실패 → OpenRouter 최후 fallback")
-
-    openrouter_error = None
-    router_models = [selected_model]
-    if OPENROUTER_FALLBACK_MODEL and OPENROUTER_FALLBACK_MODEL not in router_models:
-        router_models.append(OPENROUTER_FALLBACK_MODEL)
-
-    for selected in router_models:
-        for attempt in range(OPENROUTER_MAX_RETRIES + 1):
+        for selected_model in models:
             try:
-                result = _openrouter_generate(
-                    prompt=prompt,
-                    config=config,
-                    model=selected,
-                )
-                text = getattr(result, "text", "")
-                if not isinstance(text, str) or not text.strip():
-                    raise AIRouterError("OpenRouter 응답 텍스트가 비어 있습니다.")
-                print(f"🟢 OpenRouter 사용: {selected}")
+                print(f"🟡 OpenRouter fallback 시작: {selected_model} ({OPENROUTER_TIMEOUT_SECONDS}s)")
+                result = _openrouter_generate(prompt, config=config, model=selected_model)
+                print(f"🟢 OpenRouter 사용: {selected_model}")
                 return result
             except Exception as exc:
-                openrouter_error = exc
-                print(f"⚠️ OpenRouter 실패: {selected} / {type(exc).__name__}: {exc}")
-                if attempt < OPENROUTER_MAX_RETRIES:
-                    time.sleep(1)
+                errors.append(f"OpenRouter[{selected_model}]={type(exc).__name__}: {exc}")
+                print(f"⚠️ OpenRouter 실패: {selected_model} / {exc}")
 
-    raise AIRouterError("OpenRouter 응답 텍스트가 비어 있습니다.")
-                print(f"🟢 OpenRouter 사용: {selected}")
-                return result
-            except Exception as exc:
-                openrouter_error = exc
-                print(f"⚠️ OpenRouter 실패: {selected} / {type(exc).__name__}: {exc}")
-                if attempt < OPENROUTER_MAX_RETRIES:
-                    time.sleep(1)
-
-    # --------------------------------------------------------
-    # 3. OpenAI 최종 fallback
-    # --------------------------------------------------------
-    if OPENAI_API_KEY:
-        try:
-            result = _openai_generate(prompt=prompt, config=config)
-            print(f"🟢 OpenAI 최종 fallback 사용: {OPENAI_MODEL}")
-            return result
-        except Exception as exc:
-            openai_error = exc
-            print(f"⚠️ OpenAI fallback 실패: {type(exc).__name__}: {exc}")
-    else:
-        openai_error = AIRouterError("OPENAI_API_KEY가 없습니다.")
-
-    raise AIRouterError(
-        "Gemini 실패: "
-        f"{gemini_error}\n"
-        "OpenRouter 실패: "
-        f"{openrouter_error}\n"
-        "OpenAI 실패: "
-        f"{openai_error}"
-    )
+    raise AIRouterError(" | ".join(errors) if errors else "사용 가능한 AI provider가 없습니다.")
