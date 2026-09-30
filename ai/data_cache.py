@@ -19,7 +19,7 @@ def _key(namespace: str, value: Any) -> tuple[str, str]:
     return namespace, repr(value)
 
 
-def get_or_fetch(namespace: str, value: Any, fetcher: Callable[[], Any], ttl: float = _DEFAULT_TTL) -> Any:
+def get_or_fetch(namespace: str, value: Any, fetcher: Callable[[], Any], ttl: float = _DEFAULT_TTL, wait_timeout: float = 20.0) -> Any:
     """Return cached data; deduplicate the same key without a global network lock."""
     key = _key(namespace, value)
     while True:
@@ -46,7 +46,8 @@ def get_or_fetch(namespace: str, value: Any, fetcher: Callable[[], Any], ttl: fl
                 with _LOCK:
                     _INFLIGHT.pop(key, None)
                     event.set()
-        event.wait()
+        if not event.wait(timeout=wait_timeout):
+            raise TimeoutError(f"데이터 캐시 대기 시간 초과: {namespace} / {value}")
 
 
 def clear() -> None:
