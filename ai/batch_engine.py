@@ -167,6 +167,9 @@ def run_role_batch(module, role, tickers, account_data):
     response = router.generate_content(model="gemini-3.6-flash", contents=prompt)
     print(f"🤖 {ROLE_CONFIG[role]["name"]} AI 분석 응답 수신")
     result = getattr(response, "text", str(response))
+    if not isinstance(result, str) or not result.strip():
+        raise RuntimeError(f"{ROLE_CONFIG[role]['name']} AI 응답이 비어 있습니다.")
+    result = result.strip()
 
     # 기술 데이터는 LLM의 서술에만 의존하지 않고 최종 검증 단계까지 전달한다.
     # chart_data(60개 캔들)는 제외하고 핵심 지표 원본만 첨부해 토큰 낭비를 줄인다.
@@ -207,5 +210,8 @@ def run_team_batches(modules, tickers, account_data, max_workers=ROLE_MAX_WORKER
                 print(f"❌ {name} 분석 실패: {type(exc).__name__}: {exc}")
                 results[role] = None
     cache = cache_stats()
+    success_count = sum(1 for value in results.values() if isinstance(value, str) and value.strip())
+    failed_roles = [ROLE_CONFIG[key]["name"] for key, value in results.items() if not (isinstance(value, str) and value.strip())]
     print(f"📦 데이터 캐시: hit {cache['hits']} / miss {cache['misses']}")
+    print(f"📊 팀 분석 상태: {success_count}/4 성공" + (f" | 실패: {', '.join(failed_roles)}" if failed_roles else ""))
     return results
