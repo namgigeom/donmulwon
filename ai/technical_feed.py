@@ -74,8 +74,11 @@ def get_market_data(ticker):
     if len(frame) < 30:
         return {"error": f"{ticker} 유효한 일봉 데이터가 {len(frame)}개뿐입니다."}
 
+    ma5 = close.rolling(5).mean()
+    ma10 = close.rolling(10).mean()
     ma20 = close.rolling(20).mean()
     ma50 = close.rolling(50).mean()
+    ma100 = close.rolling(100).mean()
     ma200 = close.rolling(200).mean()
     ema12 = close.ewm(span=12, adjust=False).mean()
     ema26 = close.ewm(span=26, adjust=False).mean()
@@ -97,13 +100,14 @@ def get_market_data(ticker):
     current = _f(close.iloc[-1])
     previous = _f(close.iloc[-2])
     atr_now = _f(atr.iloc[-1])
-    ma20_now, ma50_now, ma200_now = _f(ma20.iloc[-1]), _f(ma50.iloc[-1]), _f(ma200.iloc[-1])
+    ma5_now, ma10_now = _f(ma5.iloc[-1]), _f(ma10.iloc[-1])
+    ma20_now, ma50_now, ma100_now, ma200_now = _f(ma20.iloc[-1]), _f(ma50.iloc[-1]), _f(ma100.iloc[-1]), _f(ma200.iloc[-1])
     rsi_now, macd_now, signal_now = _f(rsi.iloc[-1]), _f(macd.iloc[-1]), _f(signal.iloc[-1])
     vol_now, vol_ma = _f(volume.iloc[-1]), _f(volume_ma20.iloc[-1])
 
     # Recent swing levels: use completed daily candles, not the current close
     # alone. These are reference zones, not guaranteed support/resistance.
-    recent = frame.tail(60)
+    recent = frame.tail(120)
     recent_20, recent_50 = frame.tail(20), frame.tail(50)
     resistance_20 = _f(recent_20["High"].max())
     support_20 = _f(recent_20["Low"].min())
@@ -142,7 +146,7 @@ def get_market_data(ticker):
         "current_price": current,
         "previous_close": previous,
         "daily_change_percent": _pct(current, previous),
-        "MA20": ma20_now, "MA50": ma50_now, "MA200": ma200_now,
+        "MA5": ma5_now, "MA10": ma10_now, "MA20": ma20_now, "MA50": ma50_now, "MA100": ma100_now, "MA200": ma200_now,
         "MA20_distance_percent": _pct(current, ma20_now),
         "MA50_distance_percent": _pct(current, ma50_now),
         "MA200_distance_percent": _pct(current, ma200_now),
@@ -166,5 +170,6 @@ def get_market_data(ticker):
             "120d": _pct(current, _f(close.iloc[-121])) if len(close) >= 121 else None,
         },
         "chart_data": candles,
-        "data_note": "실제 Yahoo Finance 일봉 OHLCV와 계산 지표. chart_data는 최근 60거래일.",
+        "chart_data_bars": len(candles),
+        "data_note": "실제 Yahoo Finance 일봉 OHLCV와 계산 지표. chart_data는 최근 120거래일이며 MA5/10/20/50/100/200, RSI14, MACD, ATR14, 거래량/거래량평균, 20/50일 고저점과 52주 고저점을 포함.",
     }
