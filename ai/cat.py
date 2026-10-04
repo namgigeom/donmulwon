@@ -2,6 +2,7 @@ import os
 import json
 import glob
 from datetime import datetime
+from google.genai import types
 
 from dotenv import load_dotenv
 from ai import ai_router
@@ -311,6 +312,12 @@ def analyze(
     # 전체 데이터 구성
     # ========================================================
 
+    def _clean_text(value, limit=5000):
+        text = str(value or "").replace("\x00", "").replace("<unk>", "")
+        return text[:limit] + ("\n[후반부 생략]" if len(text) > limit else "")
+
+    # 알프레도에게 필요한 현재 데이터와 팀 판단만 전달한다.
+    # 오래된 legacy market/news 파일은 프롬프트 크기만 키우므로 제외한다.
     source_data = {
 
         "user_question":
@@ -335,19 +342,10 @@ def analyze(
 
 
         # ====================================================
-        # 기존 포트폴리오 파일
-        # ====================================================
-
-        "legacy_portfolio_file":
-            portfolio_file_data,
-
-        # legacy market_data.json은 이번 회의의 기술지표 원본이 아니다.
-        # 기술적 판단은 아래 snake의 live RAW_TECHNICAL_EVIDENCE를 우선한다.
-        "legacy_market_data": market,
-
-        "legacy_news_data": news,
-
-        "live_fundamental_news": team["crow"]["content"],
+        "live_fundamental_news": _clean_text(team["crow"]["content"]),
+        "live_technical_evidence": _clean_text(team["snake"]["content"], 7000),
+        "live_portfolio_analysis": _clean_text(team["raccoon"]["content"]),
+        "live_macro_analysis": _clean_text(team["turtle"]["content"]),
 
         # 이번 회의에서 실제로 수집된 MA/RSI/MACD/ATR/OHLCV 증거
         "technical_evidence": team["snake"]["content"],
@@ -1279,7 +1277,11 @@ current_account.data를 우선한다.
 
     response = ai_router.generate_content(
         model="gemini-3.6-flash",
-        contents=prompt
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.2,
+            max_output_tokens=1800,
+        ),
     )
 
 
