@@ -143,6 +143,11 @@ class CharacterLayer:
                 if opinion:
                     self.set_bubble(name,opinion,duration_ms)
 
+    def show_meeting_speech(self,name,text,duration_ms=5200):
+        """회의 중 발언을 순서대로 큐에 넣는다. 현재 말풍선이 끝난 뒤 다음 발언이 나온다."""
+        if name in self.POSITIONS and str(text).strip():
+            self.speech_queue.append((name,str(text).strip(),duration_ms))
+
     def clear_bubbles(self):self.bubbles={};self.bubble_until={}
 
     def tick(self):
