@@ -224,17 +224,8 @@ def analyze(
     # 원본 파일 데이터
     # ========================================================
 
-    portfolio_file_data = load_json(
-        AI_PORTFOLIO_FILE
-    )
-
-    market = load_json(
-        MARKET_DATA_FILE
-    )
-
-    news = load_json(
-        NEWS_DATA_FILE
-    )
+    # 최신 계좌는 main.py에서 직접 전달된다.
+    # 과거 파일을 매번 읽어 프롬프트에 섞지 않는다.
 
 
     # ========================================================
@@ -347,24 +338,13 @@ def analyze(
         "live_portfolio_analysis": _clean_text(team["raccoon"]["content"]),
         "live_macro_analysis": _clean_text(team["turtle"]["content"]),
 
-        # 이번 회의에서 실제로 수집된 MA/RSI/MACD/ATR/OHLCV 증거
-        "technical_evidence": team["snake"]["content"],
-
+        "technical_evidence": _clean_text(team["snake"]["content"], 7000),
 
         "team_analyses": {
-
-            "crow":
-                team["crow"]["content"],
-
-            "snake":
-                team["snake"]["content"],
-
-            "raccoon":
-                team["raccoon"]["content"],
-
-            "turtle":
-                team["turtle"]["content"]
-
+            "crow": _clean_text(team["crow"]["content"]),
+            "snake": _clean_text(team["snake"]["content"], 7000),
+            "raccoon": _clean_text(team["raccoon"]["content"]),
+            "turtle": _clean_text(team["turtle"]["content"])
         }
 
     }
