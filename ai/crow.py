@@ -256,6 +256,28 @@ def get_financials(ticker):
     except Exception:
         financial_data["latest_income_statement"] = {}
 
+    # 대차대조표: 자본구조와 유동성 판단에 사용
+    try:
+        balance = stock.balance_sheet
+        if balance is not None and not balance.empty:
+            latest_column = balance.columns[0]
+            financial_data["latest_balance_sheet"] = {}
+            tracked_balance = [
+                "Total Assets", "Total Liabilities Net Minority Interest",
+                "Stockholders Equity", "Common Stock Equity",
+                "Cash Cash Equivalents And Short Term Investments",
+                "Current Assets", "Current Liabilities",
+                "Long Term Debt", "Current Debt",
+                "Working Capital", "Net Tangible Assets"
+            ]
+            for row in tracked_balance:
+                if row in balance.index:
+                    financial_data["latest_balance_sheet"][row] = safe_value(
+                        balance.loc[row, latest_column]
+                    )
+    except Exception:
+        financial_data["latest_balance_sheet"] = {}
+
     try:
         cashflow = stock.cashflow
         if cashflow is not None and not cashflow.empty:
