@@ -3,6 +3,7 @@ import json
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from functools import lru_cache
+from google.genai import types
 
 from ai.data_cache import get_or_fetch, stats as cache_stats
 from ai import technical_feed
@@ -16,7 +17,8 @@ ROLE_CONFIG = {
 }
 DATA_MAX_WORKERS = 6
 ROLE_MAX_WORKERS = 4
-ROLE_TIMEOUT_SECONDS = 45
+ROLE_TIMEOUT_SECONDS = 35
+ROLE_MAX_OUTPUT_TOKENS = 1600
 
 def _json(data):
     return json.dumps(data, ensure_ascii=False, indent=2, default=str)
@@ -149,7 +151,7 @@ def run_role_batch(module, role, tickers, account_data):
         for symbol, stock in (data.get("stocks", {}) or {}).items():
             if isinstance(stock, dict):
                 compact_stock = dict(stock)
-                compact_stock["chart_data"] = (compact_stock.get("chart_data") or [])[-60:]
+                compact_stock["chart_data"] = (compact_stock.get("chart_data") or [])[-45:]
                 compact_stock["chart_data_bars"] = len(compact_stock["chart_data"])
                 compact[symbol] = compact_stock
         prompt_data["stocks"] = compact
@@ -182,13 +184,21 @@ def run_role_batch(module, role, tickers, account_data):
         raise RuntimeError(f"{role}의 ai_router를 찾지 못했습니다.")
     print(f"[PROGRESS 30] {ROLE_CONFIG[role]["name"]} AI 분석 시작")
     print(f"🤖 {ROLE_CONFIG[role]["name"]} AI 분석 요청 시작")
-    response = router.generate_content(model="gemini-3.6-flash", contents=prompt)
+    config = types.GenerateContentConfig(
+        temperature=0.2,
+        max_output_tokens=ROLE_MAX_OUTPUT_TOKENS,
+    )
+    response = router.generate_content(
+        model="gemini-3.6-flash",
+        contents=prompt,
+        config=config,
+    )
     print(f"[PROGRESS 45] {ROLE_CONFIG[role]["name"]} AI 분석 응답 수신")
     print(f"🤖 {ROLE_CONFIG[role]["name"]} AI 분석 응답 수신")
     result = getattr(response, "text", str(response))
     if not isinstance(result, str) or not result.strip():
         raise RuntimeError(f"{ROLE_CONFIG[role]['name']} AI 응답이 비어 있습니다.")
-    result = result.strip()
+    result = result.strip().replace("\x00", "")
     print(f"[PROGRESS 50] {ROLE_CONFIG[role]["name"]} 분석 정리 완료")
 
     # 기술 데이터는 LLM의 서술에만 의존하지 않고 최종 검증 단계까지 전달한다.
