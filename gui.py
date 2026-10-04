@@ -222,7 +222,7 @@ class MainWindow(QMainWindow):
         self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(self.on_output); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(self.analysis_done); self.thread.start()
 
     def _show_meeting_speech(self,line):
-        """[MEETING_SPEECH] 한 줄을 현재 발언자의 실제 말풍선으로 연결한다."""
+        """실제 멀티턴 회의의 현재 발언을 말풍선으로 전달한다."""
         raw=re.sub(r'^\[MEETING_SPEECH\]\s*','',str(line).strip())
         patterns=[
             ('김선달', r'^(?:🐦\s*)?김선달\s*[:：]\s*(.+)
@@ -241,11 +241,10 @@ class MainWindow(QMainWindow):
         else:
             clean=text.strip()
             if clean:
-                if '[MEETING_SPEECH]' in clean:
-                    for speech_line in clean.splitlines():
-                        if '[MEETING_SPEECH]' in speech_line:
-                            self._show_meeting_speech(speech_line)
-                    self.office.update()
+                speech_lines=[line for line in clean.splitlines() if '[MEETING_SPEECH]' in line]
+                if speech_lines:
+                    for speech_line in speech_lines:
+                        self._show_meeting_speech(speech_line)
                     return
                 line=clean.splitlines()[-1].strip()
                 progress_match=re.search(r'\\[PROGRESS\\s+(\\d+)\\]', line)
@@ -346,7 +345,7 @@ if __name__=='__main__':
         self.office.update()
 
     def _show_result_after_verdict(self,text):
-        self.progress.setValue(100); self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self.office.characters.show_final_verdict(); self.office.characters.show_team_opinions(text); self.office.update()
+        self.progress.setValue(100); self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self.office.characters.show_final_verdict(); self.office.update()
 
     def on_failed(self,err):
         self.progress.setValue(100); self.meeting.set_status('❌ 분석 실패','오류가 발생했습니다. 상세 내용은 아래 최종 결과 영역에서 확인할 수 있습니다.'); self.result.show_result('분석 실패\n\n'+err); self.office.characters.show_final_verdict(error=True); self.office.update()
@@ -409,7 +408,7 @@ if __name__=='__main__':
         self.office.update()
 
     def _show_result_after_verdict(self,text):
-        self.progress.setValue(100); self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self.office.characters.show_final_verdict(); self.office.characters.show_team_opinions(text); self.office.update()
+        self.progress.setValue(100); self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self.office.characters.show_final_verdict(); self.office.update()
 
     def on_failed(self,err):
         self.progress.setValue(100); self.meeting.set_status('❌ 분석 실패','오류가 발생했습니다. 상세 내용은 아래 최종 결과 영역에서 확인할 수 있습니다.'); self.result.show_result('분석 실패\n\n'+err); self.office.characters.show_final_verdict(error=True); self.office.update()
@@ -472,7 +471,7 @@ if __name__=='__main__':
         self.office.update()
 
     def _show_result_after_verdict(self,text):
-        self.progress.setValue(100); self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self.office.characters.show_final_verdict(); self.office.characters.show_team_opinions(text); self.office.update()
+        self.progress.setValue(100); self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self.office.characters.show_final_verdict(); self.office.update()
 
     def on_failed(self,err):
         self.progress.setValue(100); self.meeting.set_status('❌ 분석 실패','오류가 발생했습니다. 상세 내용은 아래 최종 결과 영역에서 확인할 수 있습니다.'); self.result.show_result('분석 실패\n\n'+err); self.office.characters.show_final_verdict(error=True); self.office.update()
@@ -493,6 +492,7 @@ if __name__=='__main__':
                     self._set_team_state(name,'회의중')
                     self.meeting.set_status(f'⚔️ AI TRADING TEAM · {name} 발언중',speech[:220])
                     self.status.setText(f'⚔️ AI TRADING TEAM · {name} 회의중')
+                    self.office.update()
                     return True
         return False
 
@@ -548,7 +548,7 @@ if __name__=='__main__':
         self.office.update()
 
     def _show_result_after_verdict(self,text):
-        self.progress.setValue(100); self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self.office.characters.show_final_verdict(); self.office.characters.show_team_opinions(text); self.office.update()
+        self.progress.setValue(100); self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self.office.characters.show_final_verdict(); self.office.update()
 
     def on_failed(self,err):
         self.progress.setValue(100); self.meeting.set_status('❌ 분석 실패','오류가 발생했습니다. 상세 내용은 아래 최종 결과 영역에서 확인할 수 있습니다.'); self.result.show_result('분석 실패\n\n'+err); self.office.characters.show_final_verdict(error=True); self.office.update()
