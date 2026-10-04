@@ -64,7 +64,7 @@ class CharacterLayer:
         self.pos={n:(float(x),float(y)) for n,(x,y) in self.POSITIONS.items()}
         self.active={n:True for n in self.POSITIONS}
         self.mode='idle'; self.stage='idle'; self.queue=[]
-        self.move_speed=180.0; self.bubbles={}; self.bubble_until={}
+        self.move_speed=180.0; self.bubbles={}; self.bubble_until={}; self.speech_queue=[]
         self.office_open=9<=time.localtime().tm_hour<18
         if not self.office_open:self.reset_off_hours()
 
@@ -75,7 +75,7 @@ class CharacterLayer:
         self.reset_office() if open_now else self.reset_off_hours()
 
     def reset_office(self):
-        self.mode='idle';self.stage='idle';self.queue=[];self.clear_bubbles()
+        self.mode='idle';self.stage='idle';self.queue=[];self.speech_queue=[];self.clear_bubbles()
         for n,(x,y) in self.POSITIONS.items():self.active[n]=True;self.pos[n]=(float(x),float(y))
 
     def reset_off_hours(self):
@@ -90,7 +90,7 @@ class CharacterLayer:
         self.mode='leaving';self.stage='leaving';self.queue=list(self.POSITIONS)
 
     def summon_for_question(self,overtime=False):
-        self.mode='meeting_arrival';self.stage='summon';self.queue=list(self.POSITIONS);self.clear_bubbles()
+        self.mode='meeting_arrival';self.stage='summon';self.queue=list(self.POSITIONS);self.speech_queue=[];self.clear_bubbles()
         for n in self.POSITIONS:self.active[n]=True;self.pos[n]=self.DOOR
 
     def begin_meeting(self):
@@ -148,6 +148,13 @@ class CharacterLayer:
     def tick(self):
         now=time.time()
         for c in self.characters.values():c.tick()
+
+        # 회의 발언은 한 번에 하나씩 재생한다. 출력이 빠르게 들어와도
+        # 앞선 발언을 덮어쓰지 않고 순서대로 보여준다.
+        if self.mode == 'meeting' and not self.bubbles and self.speech_queue:
+            name,text,duration=self.speech_queue.pop(0)
+            self.set_bubble(name,text,duration)
+
         for n,t in list(self.bubble_until.items()):
             if now>t:self.bubble_until.pop(n,None);self.bubbles.pop(n,None)
         if self.mode in ('arrival','meeting_arrival'):
