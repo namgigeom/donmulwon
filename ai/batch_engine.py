@@ -139,11 +139,11 @@ def run_role_batch(module, role, tickers, account_data):
     function = getattr(module, function_name, None)
     if not callable(function):
         raise RuntimeError(f"{role}의 {function_name} 함수를 찾지 못했습니다.")
-    print(f"[PROGRESS 10] {ROLE_CONFIG[role]["name"]} 자료조사 시작")
-    print(f"⏳ {ROLE_CONFIG[role]["name"]} 데이터 수집 시작: {", ".join(tickers) if tickers else "MARKET"}")
+    print(f"[PROGRESS 10] {ROLE_CONFIG[role]['name']} 자료조사 시작")
+    print(f"⏳ {ROLE_CONFIG[role]['name']} 데이터 수집 시작: {", ".join(tickers) if tickers else "MARKET"}")
     data = _collect_role_data(module, role, tickers, account_data)
-    print(f"[PROGRESS 25] {ROLE_CONFIG[role]["name"]} 자료조사 완료")
-    print(f"📦 {ROLE_CONFIG[role]["name"]} 데이터 수집 완료")
+    print(f"[PROGRESS 25] {ROLE_CONFIG[role]['name']} 자료조사 완료")
+    print(f"📦 {ROLE_CONFIG[role]['name']} 데이터 수집 완료")
     if role == "snake":
         prompt_data = dict(data)
         prompt_data["technical_brief"] = build_snake_prompt_data(data.get("stocks", {}))
@@ -182,8 +182,8 @@ def run_role_batch(module, role, tickers, account_data):
     router = getattr(module, "ai_router", None)
     if router is None or not hasattr(router, "generate_content"):
         raise RuntimeError(f"{role}의 ai_router를 찾지 못했습니다.")
-    print(f"[PROGRESS 30] {ROLE_CONFIG[role]["name"]} AI 분석 시작")
-    print(f"🤖 {ROLE_CONFIG[role]["name"]} AI 분석 요청 시작")
+    print(f"[PROGRESS 30] {ROLE_CONFIG[role]['name']} AI 분석 시작")
+    print(f"🤖 {ROLE_CONFIG[role]['name']} AI 분석 요청 시작")
     config = types.GenerateContentConfig(
         temperature=0.2,
         max_output_tokens=ROLE_MAX_OUTPUT_TOKENS,
@@ -193,13 +193,13 @@ def run_role_batch(module, role, tickers, account_data):
         contents=prompt,
         config=config,
     )
-    print(f"[PROGRESS 45] {ROLE_CONFIG[role]["name"]} AI 분석 응답 수신")
-    print(f"🤖 {ROLE_CONFIG[role]["name"]} AI 분석 응답 수신")
+    print(f"[PROGRESS 45] {ROLE_CONFIG[role]['name']} AI 분석 응답 수신")
+    print(f"🤖 {ROLE_CONFIG[role]['name']} AI 분석 응답 수신")
     result = getattr(response, "text", str(response))
     if not isinstance(result, str) or not result.strip():
         raise RuntimeError(f"{ROLE_CONFIG[role]['name']} AI 응답이 비어 있습니다.")
     result = result.strip().replace("\x00", "")
-    print(f"[PROGRESS 50] {ROLE_CONFIG[role]["name"]} 분석 정리 완료")
+    print(f"[PROGRESS 50] {ROLE_CONFIG[role]['name']} 분석 정리 완료")
 
     # 기술 데이터는 LLM의 서술에만 의존하지 않고 최종 검증 단계까지 전달한다.
     # chart_data(60개 캔들)는 제외하고 핵심 지표 원본만 첨부해 토큰 낭비를 줄인다.
