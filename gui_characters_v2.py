@@ -1,6 +1,6 @@
 import os, time, re
 from PySide6.QtCore import Qt, QRect, QPoint, QRectF, QByteArray
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QFontMetrics
 from PySide6.QtSvg import QSvgRenderer
 
 
@@ -125,6 +125,24 @@ class CharacterLayer:
         self.mode='verdict';self.stage='verdict';self.clear_bubbles()
         self.set_bubble('알프레도','분석완료! 회의완료! 최종 판단을 정리했습니다.',12000)
 
+    def show_team_opinions(self,text,duration_ms=30000):
+        """최종 결과의 각 AI 의견을 실제 캐릭터 말풍선으로 표시한다."""
+        raw=str(text)
+        labels={'현무':'🐢 현무','김선달':'🐦 김선달','이묵':'🐍 이묵','너부리':'🦝 너부리'}
+        for name,label in labels.items():
+            patterns=[
+                rf'###\s*{re.escape(label)}의 의견\s*\n(.+?)(?=\n###|\Z)',
+                rf'###\s*{re.escape(name)}의 의견\s*\n(.+?)(?=\n###|\Z)'
+            ]
+            match=None
+            for pat in patterns:
+                match=re.search(pat,raw,re.S)
+                if match: break
+            if match:
+                opinion=re.sub(r'\s+',' ',match.group(1)).strip()
+                if opinion:
+                    self.set_bubble(name,opinion,duration_ms)
+
     def clear_bubbles(self):self.bubbles={};self.bubble_until={}
 
     def tick(self):
@@ -158,21 +176,52 @@ class CharacterLayer:
             if self.active.get(n,False):self._bubble(p,n,text,self.pos[n][0],self.pos[n][1])
 
     def _bubble(self,p,name,text,x,y):
-        words=str(text).replace('\n',' ').split();lines=[];cur=''
+        # 캐릭터 머리 바로 위를 기준으로 배치하고 화면 밖으로 나가지 않게 보정한다.
+        font=QFont('Malgun Gothic',8,QFont.Bold)
+        fm=QFontMetrics(font)
+        words=str(text).replace('\\n',' ').split()
+        max_text_width=285
+        lines=[]; cur=''
         for word in words:
-            nxt=(cur+' '+word).strip()
-            if len(nxt)>25 and cur:lines.append(cur);cur=word
-            else:cur=nxt
-        if cur:lines.append(cur)
+            trial=(cur+' '+word).strip()
+            if cur and fm.horizontalAdvance(trial)>max_text_width:
+                lines.append(cur); cur=word
+            else:
+                cur=trial
+        if cur: lines.append(cur)
         lines=lines[:8] or ['...']
-        bw=max(240,min(410,max(26,max(map(len,lines)))*8+32))
-        bh=18+len(lines)*17;bx=int(x+45);by=int(y-bh-18)
-        if bx+bw>1490:bx=int(x-bw+15)
-        if bx<8:bx=8
-        if by<8:by=8
-        p.setPen(QColor('#8f7c5d'));p.setBrush(QColor('#f4ecda'))
+
+        line_h=fm.lineSpacing()
+        bw=max(150,min(325,max(fm.horizontalAdvance(line) for line in lines)+24))
+        bh=12+len(lines)*line_h+10
+        vw=max(1,p.viewport().width())
+        vh=max(1,p.viewport().height())
+
+        center_x=x+43
+        bx=int(center_x-bw/2)
+        by=int(y-bh-12)
+        bx=max(8,min(bx,vw-bw-8))
+
+        if by<8:
+            by=int(y+88)
+            if by+bh>vh-8:
+                by=max(8,vh-bh-8)
+
+        p.save()
+        p.setPen(QColor('#8f7c5d'))
+        p.setBrush(QColor('#f4ecda'))
         p.drawRoundedRect(bx,by,bw,bh,9,9)
-        tailx=int(x+20 if bx>x else x+48)
-        p.drawPolygon([QPoint(tailx,by+bh),QPoint(tailx+15,by+bh),QPoint(tailx+7,by+bh+10)])
-        p.setPen(QColor('#25221e'));p.setFont(QFont('Malgun Gothic',8,QFont.Bold))
-        p.drawText(QRect(bx+10,by+5,bw-20,bh-8),Qt.AlignLeft|Qt.AlignVCenter,'\n'.join(lines))
+
+        tail_center=max(bx+16,min(center_x,bx+bw-16))
+        p.drawPolygon([
+            QPoint(int(tail_center-8),int(by+bh-1)),
+            QPoint(int(tail_center+8),int(by+bh-1)),
+            QPoint(int(tail_center),int(by+bh+10))
+        ])
+
+        p.setPen(QColor('#25221e'))
+        p.setFont(font)
+        p.drawText(QRect(int(bx+12),int(by+7),int(bw-24),int(bh-14)),
+                   Qt.AlignLeft|Qt.AlignVCenter|Qt.TextWordWrap,
+                   '\\n'.join(lines))
+        p.restore()
