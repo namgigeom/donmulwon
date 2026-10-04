@@ -50,6 +50,36 @@ def normalize_result(result):
     except Exception:
         return str(result).replace("\x00","").replace("<unk>","")
 
+def extract_team_voice(team_results):
+    """각 전문 AI가 자기 분석에서 직접 작성한 '한마디'를 보존한다."""
+    specs = [
+        ("turtle", "🐢 현무", r"##\s*🐢\s*현무[^\n]*한마디"),
+        ("crow", "🐦 김선달", r"##\s*🐦\s*김선달[^\n]*한마디"),
+        ("snake", "🐍 이묵", r"##\s*🐍\s*이묵[^\n]*한마디"),
+        ("raccoon", "🦝 너부리", r"##\s*🦝\s*너부리[^\n]*한마디"),
+    ]
+    lines = []
+    for key, label, heading in specs:
+        raw = normalize_result(team_results.get(key, "")).strip()
+        if not raw:
+            continue
+        opinion = ""
+        match = re.search(
+            heading + r"\s*\n(.*?)(?=\n={10,}|\n##\s|\Z)",
+            raw,
+            flags=re.S,
+        )
+        if match:
+            opinion = match.group(1).strip()
+        if not opinion:
+            candidates = [x.strip(" -*#") for x in raw.splitlines() if x.strip()]
+            if candidates:
+                opinion = candidates[-1]
+        if opinion:
+            opinion = re.sub(r"\n{3,}", "\n\n", opinion).strip()
+            lines.append(f"### {label}의 의견\n{opinion}")
+    return "\n\n".join(lines)
+
 def save_meeting_file(name,data):
     path=os.path.join(HISTORY_DIR,f"{name}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.json"); save_json(path,data); return path
 
@@ -164,6 +194,12 @@ def run_meeting(parsed,modules,account_data):
             cat_result=""
     else: print("❌ 알프레도 모듈을 사용할 수 없습니다.")
     alfredo_text=normalize_result(cat_result).strip()
+
+    # 각 전문 AI의 '한마디'는 알프레도가 다시 쓰지 않고 원문을 그대로 GUI에 전달한다.
+    team_voice = extract_team_voice(team_results)
+    if team_voice:
+        alfredo_text += "\n\n---\n\n## ⚔️ 전문 AI들의 한마디\n\n" + team_voice
+
     if not alfredo_text:
         # 최종 AI가 실패해도 회의 자체의 결과를 잃지 않는다.
         debate_summary=normalize_result(debate_result.get("meeting_summary","")).strip()
