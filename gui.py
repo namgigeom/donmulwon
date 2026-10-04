@@ -222,7 +222,6 @@ class MainWindow(QMainWindow):
         self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(self.on_output); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(self.analysis_done); self.thread.start()
 
     def _show_meeting_speech(self,line):
-        """실제 멀티턴 회의의 현재 발언을 말풍선으로 전달한다."""
         raw=re.sub(r'^\[MEETING_SPEECH\]\s*','',str(line).strip())
         patterns=[
             ('김선달', r'^(?:🐦\s*)?김선달\s*[:：]\s*(.+)
@@ -247,11 +246,8 @@ class MainWindow(QMainWindow):
                         self._show_meeting_speech(speech_line)
                     return
                 line=clean.splitlines()[-1].strip()
-                progress_match=re.search(r'\\[PROGRESS\\s+(\\d+)\\]', line)
-                if progress_match:
-                    self.progress.setValue(max(0, min(100, int(progress_match.group(1)))))
                 stage='회의 진행 중'
-                detail=re.sub(r'\\[PROGRESS\\s+\\d+\\]\\s*', '', line)
+                detail=line
                 role_map={'🐦 김선달':'🐦 김선달','🐍 이묵':'🐍 이묵','🦝 너부리':'🦝 너부리','🐢 현무':'🐢 현무'}
                 for key,label in role_map.items():
                     if key in line:
@@ -264,9 +260,6 @@ class MainWindow(QMainWindow):
                         break
                 if 'OpenRouter' in line: stage='🌐 OpenRouter · 응답 대기 중'
                 elif 'Gemini' in line: stage='🤖 Gemini · 응답 대기 중'
-                elif '통합 회의 시작' in line or '통합 토론 시작' in line:
-                    stage='⚔️ AI TRADING TEAM · 회의중'
-                    for name in ['현무','김선달','이묵','너부리','알프레도']: self._set_team_state(name,'회의중')
                 elif '알프레도' in line: stage='🐱 알프레도 · 최종 검증 중'
                 self.status.setText(f'⚔️ {stage}')
                 self.meeting.set_status(f'⚔️ AI TRADING TEAM · {stage}',detail[-220:])
@@ -277,8 +270,7 @@ class MainWindow(QMainWindow):
                         elif '데이터 수집' in line: self._set_team_state(name,'자료조사중')
                         elif 'AI 분석' in line: self._set_team_state(name,'분석중')
                         else: self._set_team_state(name,'작업중')
-                if not progress_match:
-                    self.progress.setValue(min(95, max(8, self.progress.value()+1)))
+                self.progress.setValue(min(95, max(8, self.progress.value()+1)))
         self.office.update()
 
     def _show_result_after_verdict(self,text):
@@ -310,11 +302,8 @@ if __name__=='__main__':
             clean=text.strip()
             if clean:
                 line=clean.splitlines()[-1].strip()
-                progress_match=re.search(r'\\[PROGRESS\\s+(\\d+)\\]', line)
-                if progress_match:
-                    self.progress.setValue(max(0, min(100, int(progress_match.group(1)))))
                 stage='회의 진행 중'
-                detail=re.sub(r'\\[PROGRESS\\s+\\d+\\]\\s*', '', line)
+                detail=line
                 role_map={'🐦 김선달':'🐦 김선달','🐍 이묵':'🐍 이묵','🦝 너부리':'🦝 너부리','🐢 현무':'🐢 현무'}
                 for key,label in role_map.items():
                     if key in line:
@@ -327,9 +316,6 @@ if __name__=='__main__':
                         break
                 if 'OpenRouter' in line: stage='🌐 OpenRouter · 응답 대기 중'
                 elif 'Gemini' in line: stage='🤖 Gemini · 응답 대기 중'
-                elif '통합 회의 시작' in line or '통합 토론 시작' in line:
-                    stage='⚔️ AI TRADING TEAM · 회의중'
-                    for name in ['현무','김선달','이묵','너부리','알프레도']: self._set_team_state(name,'회의중')
                 elif '알프레도' in line: stage='🐱 알프레도 · 최종 검증 중'
                 self.status.setText(f'⚔️ {stage}')
                 self.meeting.set_status(f'⚔️ AI TRADING TEAM · {stage}',detail[-220:])
@@ -340,8 +326,7 @@ if __name__=='__main__':
                         elif '데이터 수집' in line: self._set_team_state(name,'자료조사중')
                         elif 'AI 분석' in line: self._set_team_state(name,'분석중')
                         else: self._set_team_state(name,'작업중')
-                if not progress_match:
-                    self.progress.setValue(min(95, max(8, self.progress.value()+1)))
+                self.progress.setValue(min(95, max(8, self.progress.value()+1)))
         self.office.update()
 
     def _show_result_after_verdict(self,text):
@@ -373,11 +358,8 @@ if __name__=='__main__':
             clean=text.strip()
             if clean:
                 line=clean.splitlines()[-1].strip()
-                progress_match=re.search(r'\\[PROGRESS\\s+(\\d+)\\]', line)
-                if progress_match:
-                    self.progress.setValue(max(0, min(100, int(progress_match.group(1)))))
                 stage='회의 진행 중'
-                detail=re.sub(r'\\[PROGRESS\\s+\\d+\\]\\s*', '', line)
+                detail=line
                 role_map={'🐦 김선달':'🐦 김선달','🐍 이묵':'🐍 이묵','🦝 너부리':'🦝 너부리','🐢 현무':'🐢 현무'}
                 for key,label in role_map.items():
                     if key in line:
@@ -390,9 +372,6 @@ if __name__=='__main__':
                         break
                 if 'OpenRouter' in line: stage='🌐 OpenRouter · 응답 대기 중'
                 elif 'Gemini' in line: stage='🤖 Gemini · 응답 대기 중'
-                elif '통합 회의 시작' in line or '통합 토론 시작' in line:
-                    stage='⚔️ AI TRADING TEAM · 회의중'
-                    for name in ['현무','김선달','이묵','너부리','알프레도']: self._set_team_state(name,'회의중')
                 elif '알프레도' in line: stage='🐱 알프레도 · 최종 검증 중'
                 self.status.setText(f'⚔️ {stage}')
                 self.meeting.set_status(f'⚔️ AI TRADING TEAM · {stage}',detail[-220:])
@@ -403,8 +382,7 @@ if __name__=='__main__':
                         elif '데이터 수집' in line: self._set_team_state(name,'자료조사중')
                         elif 'AI 분석' in line: self._set_team_state(name,'분석중')
                         else: self._set_team_state(name,'작업중')
-                if not progress_match:
-                    self.progress.setValue(min(95, max(8, self.progress.value()+1)))
+                self.progress.setValue(min(95, max(8, self.progress.value()+1)))
         self.office.update()
 
     def _show_result_after_verdict(self,text):
@@ -436,11 +414,8 @@ if __name__=='__main__':
             clean=text.strip()
             if clean:
                 line=clean.splitlines()[-1].strip()
-                progress_match=re.search(r'\\[PROGRESS\\s+(\\d+)\\]', line)
-                if progress_match:
-                    self.progress.setValue(max(0, min(100, int(progress_match.group(1)))))
                 stage='회의 진행 중'
-                detail=re.sub(r'\\[PROGRESS\\s+\\d+\\]\\s*', '', line)
+                detail=line
                 role_map={'🐦 김선달':'🐦 김선달','🐍 이묵':'🐍 이묵','🦝 너부리':'🦝 너부리','🐢 현무':'🐢 현무'}
                 for key,label in role_map.items():
                     if key in line:
@@ -453,9 +428,6 @@ if __name__=='__main__':
                         break
                 if 'OpenRouter' in line: stage='🌐 OpenRouter · 응답 대기 중'
                 elif 'Gemini' in line: stage='🤖 Gemini · 응답 대기 중'
-                elif '통합 회의 시작' in line or '통합 토론 시작' in line:
-                    stage='⚔️ AI TRADING TEAM · 회의중'
-                    for name in ['현무','김선달','이묵','너부리','알프레도']: self._set_team_state(name,'회의중')
                 elif '알프레도' in line: stage='🐱 알프레도 · 최종 검증 중'
                 self.status.setText(f'⚔️ {stage}')
                 self.meeting.set_status(f'⚔️ AI TRADING TEAM · {stage}',detail[-220:])
@@ -466,8 +438,7 @@ if __name__=='__main__':
                         elif '데이터 수집' in line: self._set_team_state(name,'자료조사중')
                         elif 'AI 분석' in line: self._set_team_state(name,'분석중')
                         else: self._set_team_state(name,'작업중')
-                if not progress_match:
-                    self.progress.setValue(min(95, max(8, self.progress.value()+1)))
+                self.progress.setValue(min(95, max(8, self.progress.value()+1)))
         self.office.update()
 
     def _show_result_after_verdict(self,text):
@@ -485,15 +456,14 @@ if __name__=='__main__':
         ]
         for name,pattern in patterns:
             m=re.match(pattern,raw,re.S)
-            if m:
+            if m and m.group(1).strip():
                 speech=m.group(1).strip()
-                if speech:
-                    self.office.characters.show_meeting_speech(name,speech,5200)
-                    self._set_team_state(name,'회의중')
-                    self.meeting.set_status(f'⚔️ AI TRADING TEAM · {name} 발언중',speech[:220])
-                    self.status.setText(f'⚔️ AI TRADING TEAM · {name} 회의중')
-                    self.office.update()
-                    return True
+                self.office.characters.show_meeting_speech(name,speech,5200)
+                self._set_team_state(name,'회의중')
+                self.meeting.set_status(f'⚔️ AI TRADING TEAM · {name} 발언중',speech[:220])
+                self.status.setText(f'⚔️ AI TRADING TEAM · {name} 회의중')
+                self.office.update()
+                return True
         return False
 
     def on_output(self,text):
@@ -513,11 +483,8 @@ if __name__=='__main__':
             clean=text.strip()
             if clean:
                 line=clean.splitlines()[-1].strip()
-                progress_match=re.search(r'\\[PROGRESS\\s+(\\d+)\\]', line)
-                if progress_match:
-                    self.progress.setValue(max(0, min(100, int(progress_match.group(1)))))
                 stage='회의 진행 중'
-                detail=re.sub(r'\\[PROGRESS\\s+\\d+\\]\\s*', '', line)
+                detail=line
                 role_map={'🐦 김선달':'🐦 김선달','🐍 이묵':'🐍 이묵','🦝 너부리':'🦝 너부리','🐢 현무':'🐢 현무'}
                 for key,label in role_map.items():
                     if key in line:
@@ -530,9 +497,6 @@ if __name__=='__main__':
                         break
                 if 'OpenRouter' in line: stage='🌐 OpenRouter · 응답 대기 중'
                 elif 'Gemini' in line: stage='🤖 Gemini · 응답 대기 중'
-                elif '통합 회의 시작' in line or '통합 토론 시작' in line:
-                    stage='⚔️ AI TRADING TEAM · 회의중'
-                    for name in ['현무','김선달','이묵','너부리','알프레도']: self._set_team_state(name,'회의중')
                 elif '알프레도' in line: stage='🐱 알프레도 · 최종 검증 중'
                 self.status.setText(f'⚔️ {stage}')
                 self.meeting.set_status(f'⚔️ AI TRADING TEAM · {stage}',detail[-220:])
@@ -543,8 +507,7 @@ if __name__=='__main__':
                         elif '데이터 수집' in line: self._set_team_state(name,'자료조사중')
                         elif 'AI 분석' in line: self._set_team_state(name,'분석중')
                         else: self._set_team_state(name,'작업중')
-                if not progress_match:
-                    self.progress.setValue(min(95, max(8, self.progress.value()+1)))
+                self.progress.setValue(min(95, max(8, self.progress.value()+1)))
         self.office.update()
 
     def _show_result_after_verdict(self,text):
