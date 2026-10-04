@@ -110,87 +110,140 @@ JSON 하나만 반환:
 """
 
 
+def _turn_prompt(question, parsed, account_data, team_results, speaker, history, turn_index):
+    role_text = {
+        "crow": "🐦 김선달 = 펀더멘털/기업/뉴스. 자신감 있고 적극적. 말투에는 기존 까악 계열을 자연스럽게 사용한다.",
+        "snake": "🐍 이묵 = 기술적 분석. 냉정하고 짧게 허점을 지적. 말투에는 기존 쉭/쉬익/쉬이익 계열을 자연스럽게 사용한다.",
+        "raccoon": "🦝 너부리 = 계좌/포트폴리오. 비중과 실제 위험을 최우선. 말투에는 기존 구리/구리구리/너굴 계열을 자연스럽게 사용한다.",
+        "turtle": "🐢 현무 = 거시경제/시장환경. 차분하게 큰 흐름을 판단하고 기존 느긋한 말버릇을 사용한다.",
+    }
+    compact_team = {}
+    for key, value in team_results.items():
+        text = normalize_result(value)
+        compact_team[key] = text[:4500] + ("\n[후반 생략]" if len(text) > 4500 else "")
+    history_text = "\n".join(history[-8:]) if history else "(아직 다른 팀원의 발언이 없다.)"
+    return f"""너는 돈물원 투자회의의 {speaker}다.
+이번 요청은 '독립 분석을 다시 하는 것'이 아니라 실제 회의에서 앞사람의 말을 듣고 한 번 발언하는 것이다.
+
+[사용자 질문]
+{question}
+
+[계좌]
+{_compact_json(account_data)}
+
+[독립 분석]
+{_compact_json(compact_team)}
+
+[네 역할]
+{role_text[speaker]}
+
+[지금까지 실제 회의 발언]
+{history_text}
+
+[회의 규칙]
+- 이전 발언 중 실제로 중요한 주장 하나에 반응한다.
+- 동의, 반박, 질문, 보완 중 하나를 명확히 한다.
+- 네 전문 영역에서 숫자/근거를 하나 이상 언급할 수 있으면 언급한다.
+- 없는 데이터는 만들지 않는다.
+- 길게 설명하지 말고 말풍선 하나에 들어갈 정도의 1~3문장으로 말한다.
+- 기존 캐릭터 말투를 자연스럽게 유지한다. 말투를 문장마다 억지로 붙이지 않는다.
+- {turn_index}번째 발언이다. 같은 내용을 반복하지 않는다.
+
+JSON 하나만 반환:
+{{
+  "speaker":"{speaker}",
+  "speech":"실제 회의에서 말할 1~3문장",
+  "position":"현재 입장 한 줄",
+  "response_to":"누구의 어떤 주장에 반응했는지 한 줄"
+}}"""
+
+
 def run_debate(modules, parsed, account_data, team_results):
     question = parsed.get("question", "")
-
     print()
     print("=" * 70)
-    print("                 ⚔️ 4인 통합 투자 토론")
+    print("                 ⚔️ 실제 멀티턴 투자회의")
     print("=" * 70)
-    print("※ 독립 분석 재호출 없음 / 통합 토론 1회")
+    print("※ 독립 분석 완료 후 4명이 순서대로 서로의 발언을 듣는다.")
 
-    prompt = build_debate_prompt(
-        question=question,
-        parsed=parsed,
-        account_data=account_data,
-        team_results=team_results,
-    )
+    speakers = ["crow", "snake", "raccoon", "turtle"]
+    history = []
+    turns = []
+    positions = {}
 
     try:
-        # 토론은 사고의 질을 유지하면서 불필요하게 긴 출력은 제한한다.
-        config = types.GenerateContentConfig(
-            temperature=0.2,
-            max_output_tokens=600,
-            response_mime_type="application/json",
+        for turn_index, speaker in enumerate(speakers, 1):
+            print(f"\n🎙️ {AI_NAMES[speaker]} 발언 요청")
+            prompt = _turn_prompt(
+                question=question,
+                parsed=parsed,
+                account_data=account_data,
+                team_results=team_results,
+                speaker=speaker,
+                history=history,
+                turn_index=turn_index,
+            )
+            config = types.GenerateContentConfig(
+                temperature=0.35,
+                max_output_tokens=220,
+                response_mime_type="application/json",
+            )
+            result = ai_router.generate_content(prompt=prompt, config=config)
+            raw = normalize_result(getattr(result, "text", result)).strip()
+            try:
+                item = json.loads(raw)
+            except Exception:
+                item = {"speaker": speaker, "speech": raw, "position": raw[:300], "response_to": ""}
+
+            speech = str(item.get("speech", "")).strip()
+            if not speech:
+                speech = str(item.get("position", "")).strip()
+            if not speech:
+                continue
+
+            label = AI_NAMES.get(speaker, speaker)
+            line = f"{label}: {speech}"
+            history.append(line)
+            turns.append({
+                "round": turn_index,
+                "agent": speaker,
+                "name": label,
+                "speech": speech,
+                "position": str(item.get("position", "")).strip(),
+                "response_to": str(item.get("response_to", "")).strip(),
+            })
+            positions[speaker] = str(item.get("position", "")).strip()
+            print("[MEETING_SPEECH] " + line)
+
+        transcript = "\n".join(t["name"] + ": " + t["speech"] for t in turns)
+        summary = " → ".join(
+            f"{t['name']} {t['position']}" for t in turns if t.get("position")
         )
-        result = ai_router.generate_content(
-            prompt=prompt,
-            config=config,
-        )
-
-        text = normalize_result(getattr(result, "text", result))
-        print("\n✅ 4인 통합 토론 완료")
-        # GUI가 회의 장면을 실제 대화처럼 재생할 수 있도록 발언을 한 줄씩 출력한다.
-        transcript = ""
-        try:
-            transcript = str(parsed_result.get("transcript", "") or "")
-        except Exception:
-            transcript = ""
-        for line in transcript.splitlines():
-            line = line.strip()
-            if line:
-                print("[MEETING_SPEECH] " + line)
-
-        try:
-            parsed_result = json.loads(text)
-        except Exception:
-            parsed_result = {
-                "meeting_summary": text,
-                "agent_positions": {},
-                "conflicts": [],
-                "consensus": [],
-                "important_corrections": [],
-                "transcript": text,
-            }
-
+        print("\n✅ 실제 멀티턴 회의 완료")
         return {
             "original_question": question,
             "initial_results": team_results,
-            "debate_results": [{
-                "round": 1,
-                "agent": "team",
-                "name": "⚔️ 통합 회의",
-                "content": text,
-            }],
-            "final_positions": parsed_result.get("agent_positions", {}),
-            "meeting_summary": parsed_result.get("meeting_summary", ""),
-            "conflicts": parsed_result.get("conflicts", []),
-            "consensus": parsed_result.get("consensus", []),
-            "important_corrections": parsed_result.get("important_corrections", []),
-            "transcript": parsed_result.get("transcript", text),
+            "debate_results": turns,
+            "final_positions": positions,
+            "meeting_summary": summary,
+            "conflicts": [t["response_to"] for t in turns if t.get("response_to")],
+            "consensus": [],
+            "important_corrections": [],
+            "transcript": transcript,
         }
 
     except Exception as e:
-        print(f"\n❌ 통합 토론 실패: {type(e).__name__}: {e}")
+        print(f"\n❌ 멀티턴 회의 실패: {type(e).__name__}: {e}")
         return {
             "original_question": question,
             "initial_results": team_results,
-            "debate_results": [],
-            "final_positions": {},
+            "debate_results": turns,
+            "final_positions": positions,
             "meeting_summary": "",
             "conflicts": [],
             "consensus": [],
             "important_corrections": [],
-            "transcript": "",
+            "transcript": "\n".join(t["name"] + ": " + t["speech"] for t in turns),
             "error": str(e),
         }
+
