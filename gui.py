@@ -273,7 +273,7 @@ class MainWindow(QMainWindow):
         self.office.update()
 
     def _show_result_after_verdict(self,text):
-        self.progress.setValue(100); self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self.office.characters.show_final_verdict(); self.office.update()
+        self.progress.setValue(100); self.result.show_result(text); self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.'); self.office.characters.show_final_verdict(); self.office.characters.show_team_opinions(text); self.office.update()
 
     def on_failed(self,err):
         self.progress.setValue(100); self.meeting.set_status('❌ 분석 실패','오류가 발생했습니다. 상세 내용은 아래 최종 결과 영역에서 확인할 수 있습니다.'); self.result.show_result('분석 실패\n\n'+err); self.office.characters.show_final_verdict(error=True); self.office.update()
