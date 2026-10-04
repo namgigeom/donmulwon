@@ -43,9 +43,12 @@ def save_json(path,data):
 
 def normalize_result(result):
     if result is None:return ""
-    if isinstance(result,str):return result
-    try:return json.dumps(result,ensure_ascii=False,indent=2,default=str)
-    except Exception:return str(result)
+    if isinstance(result,str):
+        return result.replace("\x00","").replace("<unk>","")
+    try:
+        return json.dumps(result,ensure_ascii=False,indent=2,default=str).replace("\x00","").replace("<unk>","")
+    except Exception:
+        return str(result).replace("\x00","").replace("<unk>","")
 
 def save_meeting_file(name,data):
     path=os.path.join(HISTORY_DIR,f"{name}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.json"); save_json(path,data); return path
