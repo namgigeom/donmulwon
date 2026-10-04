@@ -140,7 +140,8 @@ def run_role_batch(module, role, tickers, account_data):
     if not callable(function):
         raise RuntimeError(f"{role}의 {function_name} 함수를 찾지 못했습니다.")
     print(f"[PROGRESS 10] {ROLE_CONFIG[role]['name']} 자료조사 시작")
-    print(f"⏳ {ROLE_CONFIG[role]['name']} 데이터 수집 시작: {", ".join(tickers) if tickers else "MARKET"}")
+    ticker_label_for_log = ", ".join(tickers) if tickers else "MARKET"
+    print(f"⏳ {ROLE_CONFIG[role]['name']} 데이터 수집 시작: {ticker_label_for_log}")
     data = _collect_role_data(module, role, tickers, account_data)
     print(f"[PROGRESS 25] {ROLE_CONFIG[role]['name']} 자료조사 완료")
     print(f"📦 {ROLE_CONFIG[role]['name']} 데이터 수집 완료")
