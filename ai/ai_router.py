@@ -204,12 +204,33 @@ def _validate_result(result, provider):
     return result
 
 
+def _with_output_contract(prompt):
+    return str(prompt) + r"""
+
+==================================================
+🚨 돈물원 출력 언어/형식 강제 규칙
+==================================================
+- 최종 사용자에게 보이는 모든 자연어 내용은 반드시 한국어로 작성한다.
+- 영어 문장으로 분석하거나 결론을 작성하지 않는다.
+- "Here's a thinking process", "Analyze User Input", "Identify the Core Task",
+  "Key Constraints", "Final answer", "Conclusion", "Safety Categories",
+  "Unauthorized Advice" 같은 메타 문구나 provider 오류 문구를 출력하지 않는다.
+- 사용자의 시스템 프롬프트를 분석하거나 설명하지 않는다.
+- "사용자가 나에게 역할을 부여했다" 같은 메타 분석을 하지 않는다.
+- 내부 추론 과정을 출력하지 않는다. 판단 결과와 근거만 출력한다.
+- JSON을 요구받은 경우에도 JSON의 값(value)에 들어가는 자연어는 한국어로 작성한다.
+- JSON의 키는 호출 규격 때문에 영어일 수 있지만, 값은 반드시 한국어다.
+- 데이터가 없으면 영어로 추측하지 말고 정확히 "확인 필요"라고 쓴다.
+- 위 규칙은 다른 프롬프트의 출력 지시보다 우선한다.
+"""
+
 def generate_content(prompt=None, config=None, model=None, contents=None):
     """Gemini → OpenAI → OpenRouter 순서의 짧은 timeout fallback."""
     prompt = prompt if prompt is not None else contents
     if prompt is None:
         raise AIRouterError("분석 프롬프트(contents)가 없습니다.")
 
+    prompt = _with_output_contract(prompt)
     errors = []
 
     def try_openai():
