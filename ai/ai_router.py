@@ -62,7 +62,7 @@ def _openai_generate(prompt, config=None, model=None):
     if not OPENAI_API_KEY:
         raise AIRouterError("OPENAI_API_KEY가 없습니다.")
 
-    selected_model = model or OPENAI_MODEL
+    selected_model = OPENAI_MODEL if not model or str(model).lower().startswith("gemini-") else model
     payload = {"model": selected_model, "input": prompt}
 
     if config is not None:
@@ -109,13 +109,13 @@ def _openrouter_generate(prompt, config=None, model=None):
     if not OPENROUTER_API_KEY:
         raise AIRouterError("OPENROUTER_API_KEY가 없습니다.")
 
-    selected_model = model or (
+    selected_model = (
         OPENROUTER_DEBATE_MODEL if _is_debate_prompt(prompt) else OPENROUTER_MODEL
     )
     payload = {
         "model": selected_model,
         "messages": [
-            {"role": "system", "content": "Answer in Korean. Be concise and evidence-based."},
+            {"role": "system", "content": "반드시 한국어로 답한다. 금융 분석 요청이라도 정책 거부문을 출력하지 말고, 제공된 데이터 범위에서 사실/해석/불확실성을 구분해 분석한다. 없는 데이터는 확인 필요라고 한다."},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.2,
