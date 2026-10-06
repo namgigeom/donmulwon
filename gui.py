@@ -176,7 +176,7 @@ class MainWindow(QMainWindow):
         self.status=QLabel('대기 중 · 실제 시각 기준 사무실 상태 유지'); layout.addWidget(self.status)
         self.progress=QProgressBar(); self.progress.setRange(0,100); self.progress.setValue(0); self.progress.hide(); layout.addWidget(self.progress)
         self.meeting=MeetingLogPanel(); self.meeting.set_status('대기 중','분석을 시작하면 전원이 출입문에서 회의실로 이동합니다.'); layout.addWidget(self.meeting)
-        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setFixedHeight(72); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:5px;color:#bfb6a6;}'); layout.addWidget(self.team_status)
+        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setFixedHeight(72); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:5px;color:#bfb6a6;overflow:hidden;}'); layout.addWidget(self.team_status)
         self._reset_team_status()
         self.result=ResultPanel(); self.result.show_waiting(); layout.addWidget(self.result)
         self.setCentralWidget(root); self.thread=None; self.worker=None; self.meeting_started_at=0.0
@@ -222,9 +222,29 @@ class MainWindow(QMainWindow):
         self.thread=QThread(self); self.worker=AnalysisWorker(q); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.output.connect(self.on_output); self.worker.failed.connect(self.on_failed); self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(self.analysis_done); self.thread.start()
 
     def _show_meeting_speech(self,line):
-        raw=re.sub(r'^\[MEETING_SPEECH\]\s*','',str(line).strip())
-        patterns=[
-            ('김선달', r'^(?:🐦\s*)?김선달\s*[:：]\s*(.+)
+        raw = re.sub(r'^\[MEETING_SPEECH\]\s*', '', str(line).strip())
+        patterns = [
+            ("김선달", r"^(?:🐦\s*)?김선달\s*[:：]\s*(.+)$"),
+            ("이묵", r"^(?:🐍\s*)?이묵\s*[:：]\s*(.+)$"),
+            ("너부리", r"^(?:🦝\s*)?너부리\s*[:：]\s*(.+)$"),
+            ("현무", r"^(?:🐢\s*)?현무\s*[:：]\s*(.+)$"),
+        ]
+        for name, pattern in patterns:
+            match = re.match(pattern, raw, re.S)
+            if match and match.group(1).strip():
+                speech = match.group(1).strip()
+                self.office.characters.show_meeting_speech(name, speech, 5200)
+                self._set_team_state(name, "회의중")
+                self.meeting.set_status(
+                    f"⚔️ AI TRADING TEAM · {name} 발언중",
+                    speech[:220],
+                )
+                self.status.setText(f"⚔️ AI TRADING TEAM · {name} 회의중")
+                self.office.update()
+                return True
+        return False
+
+    def on_output(self,text):
         self.office.refresh_portfolio()
         if '[FINAL_RESULT]' in text:
             final=text.split('[FINAL_RESULT]',1)[1]
@@ -240,11 +260,6 @@ class MainWindow(QMainWindow):
         else:
             clean=text.strip()
             if clean:
-                speech_lines=[line for line in clean.splitlines() if '[MEETING_SPEECH]' in line]
-                if speech_lines:
-                    for speech_line in speech_lines:
-                        self._show_meeting_speech(speech_line)
-                    return
                 line=clean.splitlines()[-1].strip()
                 stage='회의 진행 중'
                 detail=line
@@ -281,7 +296,6 @@ class MainWindow(QMainWindow):
 
     def analysis_done(self):
         self.thread=None; self.worker=None; self.button.setEnabled(True); self.progress.hide(); self.status.setText('분석 완료 · 현재 시각 기준 사무실 상태 유지')
-
 
 if __name__=='__main__':
     app=QApplication(sys.argv); win=MainWindow(); win.show(); sys.exit(app.exec())
