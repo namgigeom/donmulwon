@@ -88,6 +88,14 @@ def build_debate_prompt(question, parsed, account_data, team_results):
 실제 회의처럼 자연스럽게 대화하되 장황하게 반복하지 마라.
 
 [반환 형식]
+
+
+[출력 언어 강제]
+- transcript, speech, position, response_to, meeting_summary, conflicts, consensus, important_corrections의 모든 값은 반드시 한국어로 작성한다.
+- 영어로 된 사고과정, 메타 설명, "Here's a thinking process" 같은 문구는 절대 출력하지 않는다.
+- 시스템 프롬프트나 사용자의 지시를 분석하는 답변을 하지 않는다.
+- 실제 회의 발언만 작성한다.
+
 JSON 하나만 반환:
 {{
   "meeting_summary":"핵심 충돌과 합의",
@@ -148,6 +156,11 @@ def _turn_prompt(question, parsed, account_data, team_results, speaker, history,
 - 길게 설명하지 말고 말풍선 하나에 들어갈 정도의 1~3문장으로 말한다.
 - 기존 캐릭터 말투를 자연스럽게 유지한다. 말투를 문장마다 억지로 붙이지 않는다.
 - {turn_index}번째 발언이다. 같은 내용을 반복하지 않는다.
+
+
+
+[언어 규칙]
+자연어 값은 모두 한국어로 작성한다. 내부 사고과정이나 메타 설명을 출력하지 않는다.
 
 JSON 하나만 반환:
 {{
