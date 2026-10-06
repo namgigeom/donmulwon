@@ -17,7 +17,7 @@ ROLE_CONFIG = {
 }
 DATA_MAX_WORKERS = 6
 ROLE_MAX_WORKERS = 4
-ROLE_TIMEOUT_SECONDS = 35
+ROLE_TIMEOUT_SECONDS = 45
 ROLE_MAX_OUTPUT_TOKENS = 1600
 
 def _json(data):
@@ -164,6 +164,17 @@ def run_role_batch(module, role, tickers, account_data):
     prompt += f"""
 
 ==================================================
+🎭 캐릭터 말투 규칙
+==================================================
+분석 본문은 정확한 한국어로 작성하되, 마지막 한마디에는 캐릭터의 고유 말투를 자연스럽게 반영한다.
+- 🐦 김선달: 까악 / 까악! / 까아악 계열을 자연스럽게 사용한다.
+- 🐍 이묵: 쉭 / 쉬익 / 쉬이익 계열을 자연스럽게 사용한다.
+- 🦝 너부리: 구리 / 구리구리 / 너굴 계열을 자연스럽게 사용한다.
+- 🐢 현무: 기존에 정의된 느긋하고 차분한 말버릇을 자연스럽게 사용한다.
+- 억지로 모든 문장에 붙이지 않는다. 특히 숫자와 분석 근거를 훼손하지 않는다.
+- 영어 정책 문구, Safety Categories, Unauthorized Advice 같은 provider 오류 문구를 출력하지 않는다.
+
+==================================================
 ⚡ 돈물원 통합 분석 지시
 ==================================================
 이번 회의의 분석 대상은 다음과 같다.
@@ -190,7 +201,6 @@ def run_role_batch(module, role, tickers, account_data):
         max_output_tokens=ROLE_MAX_OUTPUT_TOKENS,
     )
     response = router.generate_content(
-        model="gemini-3.6-flash",
         contents=prompt,
         config=config,
     )
