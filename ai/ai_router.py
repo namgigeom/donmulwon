@@ -16,7 +16,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-6-luna")
 OPENAI_FIRST = os.getenv("OPENAI_FIRST", "1").lower() in ("1", "true", "yes", "on")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 OPENROUTER_DEBATE_MODEL = os.getenv("OPENROUTER_DEBATE_MODEL", "nvidia/nemotron-3.5-lightning:free")
