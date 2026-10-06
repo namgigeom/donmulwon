@@ -46,8 +46,19 @@ def is_valid_ai_result(value):
     if not isinstance(value, str) or not value.strip():
         return False
     t=" ".join(value.lower().split())
-    refusal_markers=("safety categories:", "unauthorized advice", "user safety:", "safety category:")
-    return not any(marker in t for marker in refusal_markers)
+    invalid_markers=(
+        "safety categories:", "unauthorized advice", "user safety:", "safety category:",
+        "here's a thinking process", "analyze user input", "identify the core task",
+        "key constraints", "deconstruct the output rules", "final answer:"
+    )
+    if any(marker in t for marker in invalid_markers):
+        return False
+    # 분석 결과가 지나치게 영어 위주인 경우도 정상 결과로 취급하지 않는다.
+    hangul=sum("가" <= ch <= "힣" for ch in value)
+    latin=sum("a" <= ch.lower() <= "z" for ch in value)
+    if hangul == 0 and latin > 80:
+        return False
+    return True
 
 def normalize_result(result):
     if result is None:return ""
