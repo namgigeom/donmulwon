@@ -1285,10 +1285,13 @@ current_account.data를 우선한다.
     # 모델이 지시를 무시하고 영어 메타 분석을 반환한 경우 1회 재생성한다.
     bad_meta = (
         "here's a thinking process", "analyze user input",
-        "identify the core task", "key constraints", "final answer",
-        "safety categories:", "unauthorized advice"
+        "identify the core task", "key constraints", "deconstruct the output rules",
+        "final answer", "conclusion:", "safety categories:", "unauthorized advice"
     )
-    if not result or any(marker in result.lower() for marker in bad_meta):
+    hangul_count = sum("가" <= ch <= "힣" for ch in result)
+    latin_count = sum("a" <= ch.lower() <= "z" for ch in result)
+    mostly_english = hangul_count == 0 and latin_count > 80
+    if not result or mostly_english or any(marker in result.lower() for marker in bad_meta):
         print("⚠️ 알프레도 출력 형식 위반 감지 → 한국어 최종결과 재요청")
         retry_prompt = prompt + """
 
