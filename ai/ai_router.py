@@ -17,6 +17,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
+OPENAI_FIRST = os.getenv("OPENAI_FIRST", "1").lower() in ("1", "true", "yes", "on")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 OPENROUTER_DEBATE_MODEL = os.getenv("OPENROUTER_DEBATE_MODEL", "nvidia/nemotron-3.5-lightning:free")
 OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "openrouter/free")
@@ -173,6 +174,36 @@ def _openrouter_generate(prompt, config=None, model=None):
     return SimpleNamespace(text=text.strip())
 
 
+def _is_provider_refusal(text):
+    """AI provider의 안전/정책 거부문을 정상 분석으로 취급하지 않는다."""
+    if not isinstance(text, str):
+        return False
+    t = " ".join(text.strip().lower().split())
+    markers = (
+        "safety categories:",
+        "unauthorized advice",
+        "user safety:",
+        "safety category:",
+        "i can't provide",
+        "i cannot provide",
+        "i can't assist with",
+        "i cannot assist with",
+        "i'm unable to provide",
+        "i am unable to provide",
+        "as an ai",
+    )
+    return any(marker in t for marker in markers)
+
+
+def _validate_result(result, provider):
+    text = getattr(result, "text", "") if result is not None else ""
+    if not isinstance(text, str) or not text.strip():
+        raise AIRouterError(f"{provider} 응답 텍스트가 비어 있습니다.")
+    if _is_provider_refusal(text):
+        raise AIRouterError(f"{provider}가 분석 요청을 거부했습니다.")
+    return result
+
+
 def generate_content(prompt=None, config=None, model=None, contents=None):
     """Gemini → OpenAI → OpenRouter 순서의 짧은 timeout fallback."""
     prompt = prompt if prompt is not None else contents
@@ -181,28 +212,49 @@ def generate_content(prompt=None, config=None, model=None, contents=None):
 
     errors = []
 
-    if GEMINI_API_KEY:
+    def try_openai():
+        if not OPENAI_API_KEY:
+            return None
         try:
-            print(f"⏳ Gemini 요청 시작: {model or GEMINI_MODEL} ({GEMINI_TIMEOUT_SECONDS}s)")
-            result = _gemini_generate(prompt, config=config, model=model)
-            text = getattr(result, "text", "")
-            if isinstance(text, str) and text.strip():
-                print(f"🟢 Gemini 사용: {model or GEMINI_MODEL}")
-                return result
-            raise AIRouterError("Gemini 응답 텍스트가 비어 있습니다.")
-        except Exception as exc:
-            errors.append(f"Gemini={type(exc).__name__}: {exc}")
-            print(f"⚠️ Gemini 실패 → OpenAI fallback: {exc}")
-
-    if OPENAI_API_KEY:
-        try:
-            print(f"🔵 OpenAI fallback 시작: {OPENAI_MODEL} ({OPENAI_TIMEOUT_SECONDS}s)")
-            result = _openai_generate(prompt, config=config)
+            print(f"🔵 OpenAI 요청 시작: {OPENAI_MODEL} ({OPENAI_TIMEOUT_SECONDS}s)")
+            result = _validate_result(_openai_generate(prompt, config=config), "OpenAI")
             print(f"🟢 OpenAI 사용: {OPENAI_MODEL}")
             return result
         except Exception as exc:
             errors.append(f"OpenAI={type(exc).__name__}: {exc}")
-            print(f"⚠️ OpenAI 실패 → OpenRouter fallback: {exc}")
+            print(f"⚠️ OpenAI 실패 → 다음 provider: {exc}")
+            return None
+
+    def try_gemini():
+        if not GEMINI_API_KEY:
+            return None
+        try:
+            print(f"⏳ Gemini 요청 시작: {model or GEMINI_MODEL} ({GEMINI_TIMEOUT_SECONDS}s)")
+            result = _validate_result(
+                _gemini_generate(prompt, config=config, model=model),
+                "Gemini",
+            )
+            print(f"🟢 Gemini 사용: {model or GEMINI_MODEL}")
+            return result
+        except Exception as exc:
+            errors.append(f"Gemini={type(exc).__name__}: {exc}")
+            print(f"⚠️ Gemini 실패 → 다음 provider: {exc}")
+            return None
+
+    if OPENAI_FIRST:
+        result = try_openai()
+        if result is not None:
+            return result
+        result = try_gemini()
+        if result is not None:
+            return result
+    else:
+        result = try_gemini()
+        if result is not None:
+            return result
+        result = try_openai()
+        if result is not None:
+            return result
 
     if OPENROUTER_API_KEY:
         models = []
@@ -214,7 +266,10 @@ def generate_content(prompt=None, config=None, model=None, contents=None):
         for selected_model in models:
             try:
                 print(f"🟡 OpenRouter fallback 시작: {selected_model} ({OPENROUTER_TIMEOUT_SECONDS}s)")
-                result = _openrouter_generate(prompt, config=config, model=selected_model)
+                result = _validate_result(
+                    _openrouter_generate(prompt, config=config, model=selected_model),
+                    "OpenRouter",
+                )
                 print(f"🟢 OpenRouter 사용: {selected_model}")
                 return result
             except Exception as exc:
