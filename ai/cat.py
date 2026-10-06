@@ -1147,6 +1147,21 @@ AI들의 의견이 다르다면
 자연스럽게 "냥"을 사용한다.
 
 
+
+
+==================================================
+🚨 최종 출력 언어 강제
+==================================================
+- 사용자에게 보여지는 최종 결과는 100% 한국어로 작성한다.
+- 제목, 결론, 판단, 행동, 근거, 종목명 옆 설명, 팀원 의견, 알프레도의 한마디까지 모두 한국어다.
+- 영어 문장이나 영어 소제목을 사용하지 않는다.
+- "Here's a thinking process", "Analyze User Input", "Identify the Core Task", "Key Constraints", "Final answer", "Conclusion" 같은 메타 문구를 절대 출력하지 않는다.
+- 사용자가 제공한 프롬프트나 시스템 규칙을 분석하는 답변을 하지 않는다.
+- 내부 추론 과정은 출력하지 않고 최종 판단과 근거만 출력한다.
+- 숫자/티커/고유명사/공식 약어는 원문 표기를 유지해도 된다.
+- 데이터가 없으면 추측하지 말고 반드시 "확인 필요"라고 표시한다.
+- 지정된 최종 형식을 그대로 따르고 불필요한 서론을 붙이지 않는다.
+
 ==================================================
 🚨 현재 전달된 원본 데이터
 ==================================================
@@ -1265,7 +1280,39 @@ current_account.data를 우선한다.
     )
 
 
-    result = response.text
+    result = str(getattr(response, "text", "") or "").strip()
+
+    # 모델이 지시를 무시하고 영어 메타 분석을 반환한 경우 1회 재생성한다.
+    bad_meta = (
+        "here's a thinking process", "analyze user input",
+        "identify the core task", "key constraints", "final answer",
+        "safety categories:", "unauthorized advice"
+    )
+    if not result or any(marker in result.lower() for marker in bad_meta):
+        print("⚠️ 알프레도 출력 형식 위반 감지 → 한국어 최종결과 재요청")
+        retry_prompt = prompt + """
+
+[긴급 재출력]
+방금 출력하려던 내부 사고과정이나 영어 메타 분석은 출력하지 마라.
+사용자에게 바로 보여줄 최종 결과만 작성한다.
+반드시 한국어로 작성한다.
+반드시 아래 형식을 따른다.
+1) 알프레도 판단
+2) 종목별 행동 + 현재가
+3) 종목별 핵심 기준 가격
+4) 핵심 이유 2~4개
+5) 전문 AI들의 핵심 의견 1줄씩
+데이터가 없으면 '확인 필요'라고 한다.
+"""
+        retry = ai_router.generate_content(
+            model="gemini-3.6-flash",
+            contents=retry_prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=1800,
+            ),
+        )
+        result = str(getattr(retry, "text", "") or "").strip()
 
 
     # ========================================================
