@@ -176,7 +176,7 @@ class MainWindow(QMainWindow):
         self.status=QLabel('대기 중 · 실제 시각 기준 사무실 상태 유지'); layout.addWidget(self.status)
         self.progress=QProgressBar(); self.progress.setRange(0,100); self.progress.setValue(0); self.progress.hide(); layout.addWidget(self.progress)
         self.meeting=MeetingLogPanel(); self.meeting.set_status('대기 중','분석을 시작하면 전원이 출입문에서 회의실로 이동합니다.'); layout.addWidget(self.meeting)
-        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setFixedHeight(72); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:5px;color:#bfb6a6;overflow:hidden;}'); layout.addWidget(self.team_status)
+        self.team_status=QTextBrowser(); self.team_status.setReadOnly(True); self.team_status.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.team_status.setFixedHeight(72); self.team_status.setStyleSheet('QTextBrowser{background:#111517;border:1px solid #3f3930;padding:5px;color:#bfb6a6;}'); layout.addWidget(self.team_status)
         self._reset_team_status()
         self.result=ResultPanel(); self.result.show_waiting(); layout.addWidget(self.result)
         self.setCentralWidget(root); self.thread=None; self.worker=None; self.meeting_started_at=0.0
@@ -260,6 +260,15 @@ class MainWindow(QMainWindow):
         else:
             clean=text.strip()
             if clean:
+                speech_lines=[line for line in clean.splitlines() if '[MEETING_SPEECH]' in line]
+                for speech_line in speech_lines:
+                    self._show_meeting_speech(speech_line)
+                if speech_lines:
+                    self.office.characters.set_meeting_stage('meeting')
+                progress_match=re.search(r'\[PROGRESS\s+(\d+)\]', clean)
+                if progress_match:
+                    self.progress.setRange(0,100)
+                    self.progress.setValue(max(0,min(100,int(progress_match.group(1)))))
                 line=clean.splitlines()[-1].strip()
                 stage='회의 진행 중'
                 detail=line
@@ -285,7 +294,7 @@ class MainWindow(QMainWindow):
                         elif '데이터 수집' in line: self._set_team_state(name,'자료조사중')
                         elif 'AI 분석' in line: self._set_team_state(name,'분석중')
                         else: self._set_team_state(name,'작업중')
-                self.progress.setValue(min(95, max(8, self.progress.value()+1)))
+                self.progress.setValue(self.progress.value() if self.progress.maximum() == 0 else min(99, self.progress.value()))
         self.office.update()
 
     def _show_result_after_verdict(self,text):
