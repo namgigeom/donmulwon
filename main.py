@@ -41,6 +41,14 @@ def save_json(path,data):
         return True
     except Exception as e: print(f"⚠️ JSON 저장 실패: {type(e).__name__}: {e}"); return False
 
+
+def is_valid_ai_result(value):
+    if not isinstance(value, str) or not value.strip():
+        return False
+    t=" ".join(value.lower().split())
+    refusal_markers=("safety categories:", "unauthorized advice", "user safety:", "safety category:")
+    return not any(marker in t for marker in refusal_markers)
+
 def normalize_result(result):
     if result is None:return ""
     if isinstance(result,str):
@@ -135,13 +143,13 @@ def run_meeting(parsed,modules,account_data):
     team_results=run_team_batches(modules,tickers,account_data,max_workers=4)
     print("[PROGRESS 60] 4명 독립 분석 종료")
     elapsed = time.time()-started
-    success_roles = [key for key, value in team_results.items() if isinstance(value, str) and value.strip()]
+    success_roles = [key for key, value in team_results.items() if is_valid_ai_result(value)]
     print(f"⏱️ 4인 독립 분석 완료 ({elapsed:.1f}초) | 성공 {len(success_roles)}/4")
     if not success_roles:
         set_gui_state("error")
         details = []
         for key, value in team_results.items():
-            if isinstance(value, str) and value.strip():
+            if is_valid_ai_result(value):
                 continue
             details.append(f"{key}=실패(콘솔 로그에서 Gemini/OpenRouter/OpenAI 원인 확인)")
         detail_text = ", ".join(details) if details else "실패 원인 미상"
@@ -200,6 +208,8 @@ def run_meeting(parsed,modules,account_data):
     if team_voice:
         alfredo_text += "\n\n---\n\n## ⚔️ 전문 AI들의 한마디\n\n" + team_voice
 
+    if not is_valid_ai_result(alfredo_text):
+        alfredo_text = ""
     if not alfredo_text:
         # 최종 AI가 실패해도 회의 자체의 결과를 잃지 않는다.
         debate_summary=normalize_result(debate_result.get("meeting_summary","")).strip()
