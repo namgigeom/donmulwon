@@ -211,7 +211,8 @@ def analyze(
     question=None,
     ticker=None,
     team_analyses=None,
-    account_context=None
+    account_context=None,
+    debate_context=None
 ):
 
     print()
@@ -313,6 +314,8 @@ def analyze(
 
         "user_question":
             question,
+
+        "debate_result": _clean_text(debate_context, 6000),
 
         "requested_ticker":
             ticker,
