@@ -109,7 +109,7 @@ def _openrouter_generate(prompt, config=None, model=None):
     if not OPENROUTER_API_KEY:
         raise AIRouterError("OPENROUTER_API_KEY가 없습니다.")
 
-    selected_model = (
+    selected_model = model or (
         OPENROUTER_DEBATE_MODEL if _is_debate_prompt(prompt) else OPENROUTER_MODEL
     )
     payload = {
