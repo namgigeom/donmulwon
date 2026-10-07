@@ -1286,7 +1286,7 @@ current_account.data를 우선한다.
     bad_meta = (
         "here's a thinking process", "analyze user input",
         "identify the core task", "key constraints", "deconstruct the output rules",
-        "final answer", "conclusion:", "safety categories:", "unauthorized advice"
+        "here is the answer", "safety categories:", "unauthorized advice"
     )
     hangul_count = sum("가" <= ch <= "힣" for ch in result)
     latin_count = sum("a" <= ch.lower() <= "z" for ch in result)
