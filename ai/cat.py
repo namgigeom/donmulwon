@@ -1275,7 +1275,7 @@ current_account.data를 우선한다.
         contents=prompt,
         config=types.GenerateContentConfig(
             temperature=0.2,
-            max_output_tokens=1800,
+            max_output_tokens=4200,
         ),
     )
 
@@ -1305,6 +1305,7 @@ current_account.data를 우선한다.
 3) 종목별 핵심 기준 가격
 4) 핵심 이유 2~4개
 5) 전문 AI들의 핵심 의견 1줄씩
+각 종목 4~6줄 이내, 전체 3500토큰 이내로 압축한다.
 데이터가 없으면 '확인 필요'라고 한다.
 """
         retry = ai_router.generate_content(
@@ -1312,7 +1313,7 @@ current_account.data를 우선한다.
             contents=retry_prompt,
             config=types.GenerateContentConfig(
                 temperature=0.1,
-                max_output_tokens=1800,
+                max_output_tokens=4200,
             ),
         )
         result = str(getattr(retry, "text", "") or "").strip()
