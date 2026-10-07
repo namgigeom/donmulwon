@@ -172,91 +172,98 @@ JSON 하나만 반환:
 
 
 def run_debate(modules, parsed, account_data, team_results):
+    """
+    4명의 독립 분석을 이미 확보한 뒤, 회의는 AI 1회 호출로 통합한다.
+    기존의 4회 순차 호출은 실패 지점이 많고 느렸으며,
+    한 번의 실패가 빈 회의 결과로 이어지는 문제가 있었다.
+    """
     question = parsed.get("question", "")
     print()
     print("=" * 70)
-    print("                 ⚔️ 실제 멀티턴 투자회의")
+    print("                 ⚔️ 실제 투자회의")
     print("=" * 70)
-    print("※ 독립 분석 완료 후 4명이 순서대로 서로의 발언을 듣는다.")
 
-    speakers = ["crow", "snake", "raccoon", "turtle"]
-    history = []
-    turns = []
-    positions = {}
+    prompt = build_debate_prompt(
+        question=question,
+        parsed=parsed,
+        account_data=account_data,
+        team_results=team_results,
+    )
+
+    config = types.GenerateContentConfig(
+        temperature=0.25,
+        max_output_tokens=1800,
+        response_mime_type="application/json",
+    )
 
     try:
-        for turn_index, speaker in enumerate(speakers, 1):
-            print(f"\n🎙️ {AI_NAMES[speaker]} 발언 요청")
-            prompt = _turn_prompt(
-                question=question,
-                parsed=parsed,
-                account_data=account_data,
-                team_results=team_results,
-                speaker=speaker,
-                history=history,
-                turn_index=turn_index,
-            )
-            config = types.GenerateContentConfig(
-                temperature=0.35,
-                max_output_tokens=220,
-                response_mime_type="application/json",
-            )
-            result = ai_router.generate_content(prompt=prompt, config=config)
-            raw = normalize_result(getattr(result, "text", result)).strip()
-            try:
-                item = json.loads(raw)
-            except Exception:
-                item = {"speaker": speaker, "speech": raw, "position": raw[:300], "response_to": ""}
+        print("🎙️ 4명 전문 AI의 분석을 바탕으로 통합 회의 진행")
+        result = ai_router.generate_content(prompt=prompt, config=config)
+        raw = normalize_result(getattr(result, "text", result)).strip()
 
-            speech = str(item.get("speech", "")).strip()
-            if not speech:
-                speech = str(item.get("position", "")).strip()
-            if not speech:
-                continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            # JSON이 깨져도 회의 전체를 버리지 않는다.
+            data = {
+                "meeting_summary": raw[:1800],
+                "agent_positions": {},
+                "conflicts": [],
+                "consensus": [],
+                "important_corrections": [],
+                "transcript": raw[:3000],
+            }
 
-            label = AI_NAMES.get(speaker, speaker)
-            line = f"{label}: {speech}"
-            history.append(line)
-            turns.append({
-                "round": turn_index,
-                "agent": speaker,
-                "name": label,
-                "speech": speech,
-                "position": str(item.get("position", "")).strip(),
-                "response_to": str(item.get("response_to", "")).strip(),
-            })
-            positions[speaker] = str(item.get("position", "")).strip()
-            print("[MEETING_SPEECH] " + line)
+        positions = data.get("agent_positions") or {}
+        transcript = str(data.get("transcript") or "").strip()
+        summary = str(data.get("meeting_summary") or "").strip()
 
-        transcript = "\n".join(t["name"] + ": " + t["speech"] for t in turns)
-        summary = " → ".join(
-            f"{t['name']} {t['position']}" for t in turns if t.get("position")
-        )
-        print("\n✅ 실제 멀티턴 회의 완료")
+        # AI가 agent_positions를 생략했더라도 독립 분석을 최종 입장으로 보존한다.
+        for key in AI_NAMES:
+            if not str(positions.get(key, "")).strip():
+                source = normalize_result(team_results.get(key, "")).strip()
+                if source:
+                    positions[key] = source[-500:]
+
+        print("✅ 통합 회의 완료")
+        if transcript:
+            for line in transcript.splitlines():
+                line = line.strip()
+                if line:
+                    print("[MEETING_SPEECH] " + line)
+
         return {
             "original_question": question,
             "initial_results": team_results,
-            "debate_results": turns,
+            "debate_results": [],
             "final_positions": positions,
-            "meeting_summary": summary,
-            "conflicts": [t["response_to"] for t in turns if t.get("response_to")],
-            "consensus": [],
-            "important_corrections": [],
+            "meeting_summary": summary or "회의에서 확보된 핵심 판단을 확인 필요.",
+            "conflicts": data.get("conflicts") or [],
+            "consensus": data.get("consensus") or [],
+            "important_corrections": data.get("important_corrections") or [],
             "transcript": transcript,
         }
 
     except Exception as e:
-        print(f"\n❌ 멀티턴 회의 실패: {type(e).__name__}: {e}")
+        print(f"❌ 통합 회의 실패: {type(e).__name__}: {e}")
+
+        # 회의 API가 실패해도 독립 분석을 보존한다.
+        positions = {}
+        for key in AI_NAMES:
+            source = normalize_result(team_results.get(key, "")).strip()
+            if source:
+                positions[key] = source[-500:]
+
         return {
             "original_question": question,
             "initial_results": team_results,
-            "debate_results": turns,
+            "debate_results": [],
             "final_positions": positions,
-            "meeting_summary": "",
+            "meeting_summary": "통합 회의 호출은 실패했지만 4명의 독립 분석은 보존되어 있습니다.",
             "conflicts": [],
             "consensus": [],
             "important_corrections": [],
-            "transcript": "\n".join(t["name"] + ": " + t["speech"] for t in turns),
+            "transcript": "",
             "error": str(e),
         }
 
