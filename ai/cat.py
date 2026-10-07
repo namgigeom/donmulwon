@@ -333,17 +333,17 @@ def analyze(
 
 
         # ====================================================
-        "live_fundamental_news": _clean_text(team["crow"]["content"]),
-        "live_technical_evidence": _clean_text(team["snake"]["content"], 7000),
-        "live_portfolio_analysis": _clean_text(team["raccoon"]["content"]),
-        "live_macro_analysis": _clean_text(team["turtle"]["content"]),
+        "live_fundamental_news": _clean_text(team["crow"]["content"], 3500),
+        "live_technical_evidence": _clean_text(team["snake"]["content"], 4500),
+        "live_portfolio_analysis": _clean_text(team["raccoon"]["content"], 3000),
+        "live_macro_analysis": _clean_text(team["turtle"]["content"], 3000),
 
-        "technical_evidence": _clean_text(team["snake"]["content"], 7000),
+        "technical_evidence": _clean_text(team["snake"]["content"], 4500),
 
         "team_analyses": {
-            "crow": _clean_text(team["crow"]["content"]),
-            "snake": _clean_text(team["snake"]["content"], 7000),
-            "raccoon": _clean_text(team["raccoon"]["content"]),
+            "crow": _clean_text(team["crow"]["content"], 3500),
+            "snake": _clean_text(team["snake"]["content"], 4500),
+            "raccoon": _clean_text(team["raccoon"]["content"], 3000),
             "turtle": _clean_text(team["turtle"]["content"])
         }
 
