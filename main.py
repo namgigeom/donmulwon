@@ -198,7 +198,7 @@ def run_meeting(parsed,modules,account_data):
         team_for_cat={key:{"file":None,"content":normalize_result(value)} for key,value in team_results.items()}
         try:
             cat_started=time.time()
-            cat_result=cat.analyze(question=parsed["question"]+"\n\n"+instruction,ticker=cat_filename_label,team_analyses=team_for_cat,account_context=account_data)
+            cat_result=cat.analyze(question=parsed["question"]+"\n\n"+instruction,ticker=cat_filename_label,team_analyses=team_for_cat,account_context=account_data,debate_context=debate_result)
             cat_result=normalize_result(cat_result).strip()
             # Gemini/Router가 빈 text를 반환하는 경우 GUI가 "최종 판단 없음"으로
             # 끝나지 않도록 한 번만 재요청한다. 기존 분석 데이터는 그대로 사용한다.
