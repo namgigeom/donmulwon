@@ -231,6 +231,7 @@ def run_role_batch(module, role, tickers, account_data):
     return result
 
 def run_team_batches(modules, tickers, account_data, max_workers=ROLE_MAX_WORKERS):
+    run_team_batches.last_errors = {}
     tickers = list(dict.fromkeys(tickers or []))
     results = {}
     jobs = {}
@@ -256,13 +257,16 @@ def run_team_batches(modules, tickers, account_data, max_workers=ROLE_MAX_WORKER
                 print(f"✅ {name} 통합 분석 완료")
                 print(f"[PROGRESS 55] {name} 통합 분석 완료")
             except Exception as exc:
-                print(f"❌ {name} 분석 실패: {type(exc).__name__}: {exc}")
+                detail = f"{type(exc).__name__}: {exc}"
+                run_team_batches.last_errors[role] = detail
+                print(f"❌ {name} 분석 실패: {detail}")
                 results[role] = None
 
         for future in not_done:
             role, name = jobs[future]
             future.cancel()
             results[role] = None
+            run_team_batches.last_errors[role] = f"Timeout: {ROLE_TIMEOUT_SECONDS}초 초과"
             print(f"⏱️ {name} 분석 시간 초과 ({ROLE_TIMEOUT_SECONDS}초) → 해당 팀원 실패 처리")
             print(f"[PROGRESS 55] {name} 시간 초과 처리")
     finally:
