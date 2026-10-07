@@ -24,8 +24,8 @@ OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "openrouter/f
 
 # 속도 우선: 실패한 provider를 오래 붙잡지 않는다.
 GEMINI_TIMEOUT_SECONDS = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "15"))
-OPENAI_TIMEOUT_SECONDS = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "20"))
-OPENROUTER_TIMEOUT_SECONDS = int(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "8"))
+OPENAI_TIMEOUT_SECONDS = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "45"))
+OPENROUTER_TIMEOUT_SECONDS = int(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "12"))
 OPENROUTER_MAX_RETRIES = 0
 
 _gemini_client = (
@@ -63,7 +63,7 @@ def _openai_generate(prompt, config=None, model=None):
         raise AIRouterError("OPENAI_API_KEY가 없습니다.")
 
     selected_model = OPENAI_MODEL if not model or str(model).lower().startswith("gemini-") else model
-    payload = {"model": selected_model, "input": prompt}
+    payload = {"model": selected_model, "input": prompt, "store": False}
 
     if config is not None:
         max_output_tokens = getattr(config, "max_output_tokens", None)
