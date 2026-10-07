@@ -215,22 +215,36 @@ def run_meeting(parsed,modules,account_data):
     else: print("❌ 알프레도 모듈을 사용할 수 없습니다.")
     alfredo_text=normalize_result(cat_result).strip()
 
-    # 각 전문 AI의 '한마디'는 알프레도가 다시 쓰지 않고 원문을 그대로 GUI에 전달한다.
+    # 전문 AI의 원문 한마디는 최종 판단 본문에 무조건 붙이지 않는다.
+    # 알프레도 응답이 실패했을 때 팀원 한마디만 남는 문제를 방지한다.
     team_voice = extract_team_voice(team_results)
-    if team_voice:
-        alfredo_text += "\n\n---\n\n## ⚔️ 전문 AI들의 한마디\n\n" + team_voice
 
     if not is_valid_ai_result(alfredo_text):
         alfredo_text = ""
+
     if not alfredo_text:
-        # 최종 AI가 실패해도 회의 자체의 결과를 잃지 않는다.
-        debate_summary=normalize_result(debate_result.get("meeting_summary","")).strip()
-        positions=normalize_result(debate_result.get("final_positions",{})).strip()
-        alfredo_text=(
-            "알프레도 최종 검증 응답이 생성되지 않았습니다.\\n\\n"
-            "회의에서 확인된 내용:\\n"+(debate_summary or "확인 가능한 통합 회의 요약이 없습니다.")+
-            ("\\n\\n팀별 최종 입장:\\n"+positions if positions else "")
+        debate_summary = normalize_result(debate_result.get("meeting_summary","")).strip()
+        positions = debate_result.get("final_positions", {}) or {}
+        position_lines = []
+        for key, label in [("crow","🐦 김선달"),("snake","🐍 이묵"),("raccoon","🦝 너부리"),("turtle","🐢 현무")]:
+            value = normalize_result(positions.get(key, "")).strip()
+            if value:
+                position_lines.append(f"- {label}: {value[:300]}")
+
+        alfredo_text = (
+            "# 🐱 알프레도 총괄 판단\n\n"
+            "## 최종 판단\n"
+            "알프레도의 최종 검증 응답이 정상적으로 생성되지 않았다. "
+            "아래 내용은 회의에서 확보된 자료를 보존한 것이다. "
+            "새로운 수치나 판단을 추측하지 않는다.\n\n"
+            "## ⚔️ 회의 핵심\n"
+            + (debate_summary[:1800] if debate_summary else "확인 가능한 통합 회의 요약이 없습니다.")
+            + "\n\n## 전문 AI 최종 입장\n"
+            + ("\n".join(position_lines) if position_lines else "각 팀원의 최종 입장을 확인할 수 없습니다.")
+            + "\n\n※ 상세 최종 판단은 다음 분석에서 다시 확인 필요."
         )
+
+    # 전문 AI 한마디는 최종 판단과 분리해 회의 로그에서만 사용한다.
     final_data={**package,"alfredo":alfredo_text}; final_path=save_meeting_file("final_meeting",final_data)
     print("\n"+"━"*70); print("🐱 알프레도 최종 판단"); print("━"*70); print(alfredo_text); print("━"*70); print(f"💾 최종 회의록: {final_path}")
     print("[PROGRESS 100] 분석 파이프라인 완료")
