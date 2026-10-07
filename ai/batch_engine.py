@@ -17,8 +17,8 @@ ROLE_CONFIG = {
 }
 DATA_MAX_WORKERS = 6
 ROLE_MAX_WORKERS = 4
-ROLE_TIMEOUT_SECONDS = 45
-ROLE_MAX_OUTPUT_TOKENS = 1600
+ROLE_TIMEOUT_SECONDS = 120
+ROLE_MAX_OUTPUT_TOKENS = 1400
 
 def _json(data):
     return json.dumps(data, ensure_ascii=False, indent=2, default=str)
