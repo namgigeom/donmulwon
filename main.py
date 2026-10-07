@@ -162,7 +162,8 @@ def run_meeting(parsed,modules,account_data):
         for key, value in team_results.items():
             if is_valid_ai_result(value):
                 continue
-            details.append(f"{key}=실패(콘솔 로그에서 Gemini/OpenRouter/OpenAI 원인 확인)")
+            role_error = getattr(run_team_batches, "last_errors", {}).get(key, "원인 미상")
+            details.append(f"{key}=실패({role_error})")
         detail_text = ", ".join(details) if details else "실패 원인 미상"
         raise RuntimeError(
             "4명 전문 AI가 모두 응답하지 못했습니다. "
