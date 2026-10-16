@@ -159,15 +159,11 @@ def _openrouter_generate(prompt, config=None, model=None):
     if isinstance(text, list):
         text = "".join(item.get("text", "") for item in text if isinstance(item, dict))
 
-    if not text:
-        reasoning = message.get("reasoning", "")
-        if isinstance(reasoning, list):
-            reasoning = "".join(item.get("text", "") if isinstance(item, dict) else str(item) for item in reasoning)
-        text = reasoning
-
+    # reasoning 필드는 내부 추론일 수 있으므로 사용자에게 절대 노출하지 않는다.
+    # 실제 답변 content가 비어 있으면 해당 모델 응답을 실패로 처리하고 다음 provider로 넘긴다.
     if not isinstance(text, str) or not text.strip():
         raise AIRouterError(
-            "OpenRouter 응답 텍스트가 비어 있습니다. "
+            "OpenRouter의 최종 답변 본문이 비어 있습니다. "
             f"(model={selected_model}, provider={data.get('provider')}, finish_reason={choices[0].get('finish_reason')})"
         )
 
@@ -201,6 +197,28 @@ def _validate_result(result, provider):
         raise AIRouterError(f"{provider} 응답 텍스트가 비어 있습니다.")
     if _is_provider_refusal(text):
         raise AIRouterError(f"{provider}가 분석 요청을 거부했습니다.")
+
+    # 돈물원은 사용자 화면용 자연어 보고서를 한국어로 출력해야 한다.
+    # 영문 사고과정/메타 문구 또는 한글이 전혀 없는 긴 영문 답변은 노출하지 않고
+    # 다음 provider로 넘겨 재시도한다. 티커·숫자·공식 약어는 허용한다.
+    lowered = text.lower()
+    bad_meta = (
+        "here's a thinking process",
+        "here is a thinking process",
+        "analyze user input",
+        "identify the core task",
+        "key constraints",
+        "deconstruct the output rules",
+        "final answer:",
+        "safety categories:",
+        "unauthorized advice",
+    )
+    if any(marker in lowered for marker in bad_meta):
+        raise AIRouterError(f"{provider}가 영문 메타 문구를 반환했습니다.")
+    hangul_count = sum("가" <= ch <= "힣" for ch in text)
+    latin_count = sum("a" <= ch.lower() <= "z" for ch in text)
+    if hangul_count == 0 and latin_count > 80:
+        raise AIRouterError(f"{provider}가 한국어가 아닌 영문 답변을 반환했습니다.")
     return result
 
 
