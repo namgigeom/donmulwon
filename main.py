@@ -52,6 +52,12 @@ def is_safe_meeting_text(value):
     lowered = text_value.lower()
     if text_value.startswith(("{", "[", "```")):
         return False
+    if "[RAW_TECHNICAL_EVIDENCE]" in text_value or "raw_technical_evidence" in lowered or "chart_dat" in lowered:
+        return False
+    if "[후반부 생략]" in text_value or "[분석 후반부 생략]" in text_value:
+        return False
+    if text_value.rstrip().endswith((",", ":", "—", "-", "/", "{", "[", "...")):
+        return False
     if any(marker in lowered for marker in ('"meeting_summary"', '"agent_positions"', '"transcript"', '"conflicts"', '"consensus"')):
         return False
     if re.search(r'(?m)^\s*"(?:meeting_summary|agent_positions|transcript|conflicts|consensus)"\s*:', text_value):
