@@ -212,22 +212,8 @@ def run_role_batch(module, role, tickers, account_data):
     result = result.strip().replace("\x00", "")
     print(f"[PROGRESS 50] {ROLE_CONFIG[role]['name']} 분석 정리 완료")
 
-    # 기술 데이터는 LLM의 서술에만 의존하지 않고 최종 검증 단계까지 전달한다.
-    # chart_data(60개 캔들)는 제외하고 핵심 지표 원본만 첨부해 토큰 낭비를 줄인다.
-    if role == "snake":
-        compact_stocks = {}
-        for symbol, stock in data.get("stocks", {}).items():
-            if isinstance(stock, dict):
-                compact_stocks[symbol] = {
-                    key: value for key, value in stock.items()
-                    if key != "chart_data"
-                }
-        result = (
-            str(result)
-            + "\n\n[RAW_TECHNICAL_EVIDENCE]\n"
-            + _json(compact_stocks)
-            + "\n[/RAW_TECHNICAL_EVIDENCE]"
-        )
+    # 원본 기술 데이터는 이미 이묵의 분석 프롬프트에 제공된다.
+    # 분석 결과 문자열에 JSON을 덧붙이면 회의와 최종 보고서에 원문이 섞이므로 분리한다.
     return result
 
 def run_team_batches(modules, tickers, account_data, max_workers=ROLE_MAX_WORKERS):
