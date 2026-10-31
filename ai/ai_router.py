@@ -134,7 +134,7 @@ def _openrouter_generate(prompt, config=None, model=None):
         if temperature is not None:
             payload["temperature"] = temperature
         if max_output_tokens is not None:
-            payload["max_tokens"] = min(int(max_output_tokens), 2800 if _is_debate_prompt(prompt) else int(max_output_tokens))
+            payload["max_tokens"] = min(int(max_output_tokens), 1000 if _is_debate_prompt(prompt) else 1200)
 
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
