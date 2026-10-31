@@ -124,12 +124,12 @@ JSON 하나만 반환:
 }}
 
 [transcript 말풍선 규칙]
-- transcript는 실제 회의처럼 6~12개의 짧은 발언으로 작성한다.
+- transcript는 실제 회의처럼 4~6개의 짧은 발언으로 작성한다.
 - 한 발언은 반드시 한 줄로 작성한다.
 - 형식은 정확히 "🐦 김선달: 발언", "🐍 이묵: 발언", "🦝 너부리: 발언", "🐢 현무: 발언" 중 하나를 사용한다.
 - 같은 사람이 연속해서 너무 오래 말하지 않는다.
 - 서로의 주장에 실제로 반응하고, 동의/반박/질문/재반박이 섞이게 한다.
-- 발언은 말풍선에 들어갈 수 있도록 짧게 쓴다.
+- 발언은 한 문장으로 짧게 쓴다. 전체 JSON은 900토큰 이내로 제한한다.
 - 각 캐릭터의 기존 말투를 유지한다. 김선달은 까악 계열, 이묵은 쉭/쉬익 계열, 너부리는 구리/구리구리/너굴 계열, 현무는 기존의 느긋한 말버릇을 사용한다.
 - 전문용어와 숫자는 유지하되 긴 문단은 만들지 않는다.
 """
@@ -209,7 +209,7 @@ def run_debate(modules, parsed, account_data, team_results):
 
     config = types.GenerateContentConfig(
         temperature=0.25,
-        max_output_tokens=1800,
+        max_output_tokens=1000,
         response_mime_type="application/json",
     )
 
