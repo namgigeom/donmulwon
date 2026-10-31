@@ -1177,23 +1177,9 @@ AI들의 의견이 다르다면
 🚨 기술적 분석 데이터 사용 규칙
 ==================================================
 
-이번 회의의 기술적 분석 원본은 legacy_market_data가 아니다.
-반드시 source_data의 technical_evidence에 포함된
-[RAW_TECHNICAL_EVIDENCE]를 확인한다.
-
-각 종목에 status=OK가 있으면 실제 Yahoo Finance 일봉 데이터와
-MA20/MA50/MA200, RSI14, MACD, MACD_signal, MACD_histogram,
-ATR14, 변동성, 거래량, 최근 20/50일 고저점, 52주 고저점,
-5/20/60/120일 수익률 및 최근 OHLCV가 제공된 것이다.
-
-status=OK인 종목에 대해 절대로
-'차트 데이터가 없다', 'market_data가 비어 있다',
-'기술지표를 확인할 수 없다'고 말하지 않는다.
-반드시 실제 숫자를 인용하여 기술적 분석을 수행한다.
-
-기존 market_data.json이 비어 있거나 오래된 경우에도
-그것을 이유로 기술적 분석을 포기하지 않는다.
-이번 회의의 live technical_evidence를 우선한다.
+이번 입력에는 이묵이 작성한 기술적 분석 문장만 포함될 수 있다.
+별도의 원본 기술지표 JSON이 전달되지 않았다면 MA, RSI, MACD, ATR, OHLCV 수치를 임의로 복원하거나 추측하지 않는다.
+이묵의 분석 문장에 실제로 기재된 숫자만 인용하고, 원본 지표값의 독립 검증이 필요한 경우 '확인 필요'라고 표시한다.
 
 ==================================================
 마지막 원칙
@@ -1293,6 +1279,12 @@ current_account.data를 우선한다.
         stripped = text.strip()
         lowered = stripped.lower()
         if stripped.startswith(("{", "[", "```")):
+            return False
+        if "[RAW_TECHNICAL_EVIDENCE]" in stripped or "raw_technical_evidence" in lowered or "chart_dat" in lowered:
+            return False
+        if "[후반부 생략]" in stripped or "[분석 후반부 생략]" in stripped:
+            return False
+        if stripped.rstrip().endswith((",", ":", "—", "-", "/", "{", "[", "...")):
             return False
         json_markers = ('"meeting_summary"', '"agent_positions"', '"transcript"', '"conflicts"', '"consensus"')
         if any(marker in lowered for marker in json_markers):
