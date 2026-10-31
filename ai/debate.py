@@ -201,22 +201,41 @@ def run_debate(modules, parsed, account_data, team_results):
         result = ai_router.generate_content(prompt=prompt, config=config)
         raw = normalize_result(getattr(result, "text", result)).strip()
 
+        # 응답이 JSON으로 완전히 파싱되고 객체인지 확인한다.
+        # 파싱 실패 시 JSON 원문/잘린 원문을 요약이나 대화록으로 노출하지 않는다.
+        if raw.startswith("```"):
+            raw = raw.strip()
+            raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         try:
             data = json.loads(raw)
-        except Exception:
-            # JSON이 깨져도 회의 전체를 버리지 않는다.
-            data = {
-                "meeting_summary": raw[:1800],
-                "agent_positions": {},
-                "conflicts": [],
-                "consensus": [],
-                "important_corrections": [],
-                "transcript": raw[:3000],
-            }
+            if not isinstance(data, dict):
+                raise ValueError("회의 응답 최상위 값이 JSON 객체가 아닙니다.")
+        except Exception as parse_error:
+            print(f"⚠️ 통합 회의 JSON 파싱 실패: {type(parse_error).__name__}: {parse_error}")
+            data = {}
 
-        positions = data.get("agent_positions") or {}
+        positions = data.get("agent_positions") if isinstance(data.get("agent_positions"), dict) else {}
         transcript = str(data.get("transcript") or "").strip()
         summary = str(data.get("meeting_summary") or "").strip()
+
+        # 회의 요약이 JSON 조각/영문 메타/빈 값이면 독립 분석에서 안전한 요약을 구성한다.
+        if not summary or summary.lstrip().startswith(("{", "[", "```")) or "meeting_summary" in summary:
+            summary_parts = []
+            for key in AI_NAMES:
+                source = normalize_result(team_results.get(key, "")).strip()
+                if source:
+                    compact = " ".join(source.split())
+                    summary_parts.append(f"{AI_NAMES[key]}: {compact[:260]}")
+            summary = "회의 응답을 구조화하지 못해 전문 AI의 독립 분석을 보존합니다. " + (
+                " / ".join(summary_parts) if summary_parts else "확인 가능한 독립 분석이 없습니다."
+            )
+            transcript = ""
+
+        # 목록 필드는 실제 문자열 목록만 허용한다. 비정상 타입/JSON 문자열은 폐기한다.
+        def safe_list(value):
+            if not isinstance(value, list):
+                return []
+            return [str(item).strip()[:500] for item in value if isinstance(item, str) and item.strip() and not item.lstrip().startswith(("{", "["))]
 
         # AI가 agent_positions를 생략했더라도 독립 분석을 최종 입장으로 보존한다.
         for key in AI_NAMES:
@@ -238,9 +257,9 @@ def run_debate(modules, parsed, account_data, team_results):
             "debate_results": [],
             "final_positions": positions,
             "meeting_summary": summary or "회의에서 확보된 핵심 판단을 확인 필요.",
-            "conflicts": data.get("conflicts") or [],
-            "consensus": data.get("consensus") or [],
-            "important_corrections": data.get("important_corrections") or [],
+            "conflicts": safe_list(data.get("conflicts")),
+            "consensus": safe_list(data.get("consensus")),
+            "important_corrections": safe_list(data.get("important_corrections")),
             "transcript": transcript,
         }
 
