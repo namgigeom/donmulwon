@@ -1294,7 +1294,24 @@ current_account.data를 우선한다.
     hangul_count = sum("가" <= ch <= "힣" for ch in result)
     latin_count = sum("a" <= ch.lower() <= "z" for ch in result)
     mostly_english = hangul_count == 0 and latin_count > 80
-    if not result or mostly_english or any(marker in result.lower() for marker in bad_meta):
+    reasoning_markers = (
+        "let me break down what's being asked",
+        "let me start by understanding",
+        "let me plan the sections",
+        "the user wants me to act as",
+        "the user provided a complex system prompt",
+        "wait, looking at the format",
+        "chain-of-thought",
+        "my reasoning process",
+        "step-by-step reasoning",
+    )
+    leaks_reasoning = any(marker in result.lower() for marker in reasoning_markers) or bool(
+        __import__("re").search(
+            r"(?im)^\\s*(?:let me|i need to|i should)\\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)",
+            result,
+        )
+    )
+    if not result or mostly_english or leaks_reasoning or any(marker in result.lower() for marker in bad_meta):
         print("⚠️ 알프레도 출력 형식 위반 감지 → 한국어 최종결과 재요청")
         retry_prompt = prompt + """
 
@@ -1321,6 +1338,20 @@ current_account.data를 우선한다.
         )
         result = str(getattr(retry, "text", "") or "").strip()
 
+    # 재시도 결과도 동일한 기준으로 검증한다. 실패한 내부 분석을 파일/GUI에 저장하지 않는다.
+    retry_lower = result.lower()
+    retry_hangul = sum("가" <= ch <= "힣" for ch in result)
+    retry_latin = sum("a" <= ch.lower() <= "z" for ch in result)
+    retry_leak = any(marker in retry_lower for marker in reasoning_markers) or bool(
+        __import__("re").search(
+            r"(?im)^\\s*(?:let me|i need to|i should)\\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)",
+            result,
+        )
+    )
+    if not result or (retry_hangul == 0 and retry_latin > 80) or retry_leak or any(marker in retry_lower for marker in bad_meta):
+        raise ai_router.AIRouterError(
+            "알프레도 최종 응답이 내부 사고과정/영문 메타 분석 검증을 통과하지 못했습니다."
+        )
 
     # ========================================================
     # 분석 저장
