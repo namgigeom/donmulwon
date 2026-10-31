@@ -105,3 +105,55 @@
 - 실제 Python 실행, provider API 호출, GUI 통합 테스트는 이 작업에서 수행하지 않았다. 따라서 런타임 정상 동작을 보장하지 않는다.
 - 특히 실제 모델이 다른 표현으로 내부 사고과정을 출력할 가능성은 남아 있다. 로컬에서 `git pull` 후 알프레도 분석을 실행하고, 정상 보고서 출력 및 잘못된 응답의 재요청/fallback 로그를 확인해야 한다.
 - 이 수정은 내부 작업 메모 노출을 줄이는 출력 검증 보강이며, 모델의 모든 사고과정 노출을 수학적으로 완전히 차단한다고 보장하는 것은 아니다.
+
+## 추가 수정 기록 (2026-10-31) — 전문 AI 4명 전체 실패 및 fallback 오류 수정
+
+### 사용자가 전달한 실제 오류
+- `main.run_analysis()` → `run_meeting()` → `run_team_batches()` 경로에서 전문 AI 4명 모두 유효한 결과를 반환하지 못해 분석 전체가 중단됐다.
+- 김선달(`crow`): OpenAI 429 `credit_balance_exhausted`, Gemini 504 `DEADLINE_EXCEEDED`, OpenRouter fallback에서 `NameError: name 're' is not defined`.
+- 현무(`turtle`): OpenAI 크레딧 소진, Gemini 504, OpenRouter 응답 `finish_reason=length` 및 최종 답변 본문 공백.
+- 너부리(`raccoon`): OpenAI 크레딧 소진, Gemini 504, OpenRouter 두 모델 모두 `finish_reason=length` 및 최종 답변 본문 공백.
+- 이묵(`snake`): 전문 분석 제한시간 120초 초과.
+
+### 원인 분석
+1. **확정된 코드 결함 — 정규식 모듈 미수입**
+   - 직전 작업에서 `ai/ai_router.py`의 `_validate_result()`에 `re.search()` 검사를 추가했지만, 파일 상단에 `import re`가 실제 반영되지 않았다.
+   - 따라서 OpenAI/Gemini가 실패하고 OpenRouter 응답까지 도달한 김선달에서 `NameError`가 발생했다. 같은 경로를 타는 다른 역할도 동일한 코드 결함에 걸릴 수 있었다.
+
+2. **확정된 외부 API 상태 — OpenAI 크레딧 소진**
+   - OpenAI 응답은 코드 문법 문제가 아니라 계정의 API 크레딧 잔액 소진을 명시한 HTTP 429다.
+   - 코드 수정만으로 크레딧을 복구할 수 없다.
+
+3. **외부 서비스 응답 문제 — Gemini 504**
+   - Gemini가 요청 제한시간 전에 응답하지 못해 `DEADLINE_EXCEEDED`가 발생했다. 계정/서비스 상태에 따른 외부 실패로, 이 traceback만으로 정확한 서버 측 원인을 확정할 수 없다.
+
+4. **OpenRouter 응답 길이 부족**
+   - 역할별 출력 한도가 1400 토큰으로 제한되어 있었고, 실제 응답은 `finish_reason=length`인데 최종 `message.content`가 비어 있었다.
+   - 내부 reasoning을 사용자 답변으로 대체하지 않는 기존 보안 원칙은 유지해야 하므로, 빈 본문을 정상 응답으로 간주하지 않는다.
+
+5. **이묵 시간 초과**
+   - `ai/batch_engine.py`의 역할별 제한시간이 120초였다. 기술 데이터 수집과 분석이 겹치는 실행에서 120초를 넘으면 해당 역할을 실패 처리한다. 이번 로그만으로 지연이 데이터 수집인지 모델 응답인지까지는 확정할 수 없다.
+
+### 수정 내용
+1. `ai/ai_router.py`
+   - 실제 호출되는 정규식 검사에 필요한 `import re`를 추가했다. 이번 로그의 직접적인 NameError 원인 수정이다.
+   - 정규식 패턴의 이중 이스케이프를 바로잡아 공백/문자 경계가 실제로 검사되도록 수정했다.
+   - OpenAI가 `credit_balance_exhausted` 또는 `no credits remaining`을 반환하면 프로세스 내 플래그를 설정하고, 이후 역할 분석에서는 OpenAI 호출을 생략해 동일한 크레딧 오류를 반복 호출하지 않도록 했다.
+   - OpenRouter 토론 프롬프트의 최대 출력 토큰 제한을 1400에서 2800으로 높였다. 빈 본문/길이 종료가 다시 발생하지 않는다는 보장은 아니며, provider별 출력 한도에 따라 여전히 실패할 수 있다.
+   - 커밋: `2bc75152b0bf00ab737dea8db385ed314732795d`
+
+2. `ai/batch_engine.py`
+   - 전문 AI 역할별 출력 한도를 1400에서 2800 토큰으로 높였다.
+   - 역할별 제한시간을 120초에서 180초로 늘려 기술 데이터 수집 및 응답 지연에 대한 여유를 확보했다.
+   - 커밋: `6d0ff9e219606e9ca9abcc9df88ce9c8674dc9fb`
+
+3. `main.py`
+   - 최종 결과의 내부 분석 서두 탐지 정규식에서 이중 이스케이프를 바로잡았다. 기존 패턴이 의도한 공백/단어 경계를 검사하지 못할 수 있던 문제를 수정했다.
+   - 커밋: `a503e3abdd28c672c09238478dd4435cb1be0937`
+
+### 변경 후 확인
+- GitHub에 저장된 최신 파일을 다시 fetch하여 `ai/ai_router.py`에 `import re`가 존재하는지, OpenAI 크레딧 소진 회로차단 플래그가 있는지, 정규식 패턴이 올바른지 확인했다.
+- `ai/batch_engine.py`에서 역할 제한시간 180초 및 출력 한도 2800을 확인했다.
+- `main.py`의 정규식도 올바른 공백/단어 경계 패턴으로 저장된 것을 확인했다.
+- 실제 Python 실행, API 재호출, GUI 통합 테스트는 수행하지 않았다. 따라서 provider가 다시 정상 응답할지 또는 OpenRouter 무료 모델의 빈 본문 문제가 해소될지는 아직 검증되지 않았다.
+- OpenAI는 크레딧을 충전하거나 유효한 다른 API 키/계정으로 바꾸기 전까지 계속 건너뛰게 된다. Gemini 504 및 OpenRouter `finish_reason=length`는 외부 서비스/모델 상태에 따라 재발할 수 있다.
