@@ -3,6 +3,7 @@ import time
 import json
 import urllib.request
 import urllib.error
+import re
 from types import SimpleNamespace
 
 from dotenv import load_dotenv
@@ -27,6 +28,7 @@ GEMINI_TIMEOUT_SECONDS = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "15"))
 OPENAI_TIMEOUT_SECONDS = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "45"))
 OPENROUTER_TIMEOUT_SECONDS = int(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "12"))
 OPENROUTER_MAX_RETRIES = 0
+_OPENAI_QUOTA_EXHAUSTED = False
 
 _gemini_client = (
     genai.Client(
@@ -127,7 +129,7 @@ def _openrouter_generate(prompt, config=None, model=None):
         if temperature is not None:
             payload["temperature"] = temperature
         if max_output_tokens is not None:
-            payload["max_tokens"] = min(int(max_output_tokens), 1400 if _is_debate_prompt(prompt) else int(max_output_tokens))
+            payload["max_tokens"] = min(int(max_output_tokens), 2800 if _is_debate_prompt(prompt) else int(max_output_tokens))
 
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
@@ -219,9 +221,9 @@ def _validate_result(result, provider):
 
     # 영어로 작성된 자기 지시형 분석 서두가 한국어 문장과 섞여도 차단한다.
     meta_patterns = (
-        r"(?im)^\\s*(?:let me|i need to|i should|first,? let me)\\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)",
-        r"(?im)^\\s*\\d+\\.\\s*(?:the user|i need to|let me)\\b",
-        r"(?im)^\\s*(?:from current_account|from technical evidence|from macro analysis)\\s*:",
+        r"(?im)^\s*(?:let me|i need to|i should|first,? let me)\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)",
+        r"(?im)^\s*\d+\.\s*(?:the user|i need to|let me)\b",
+        r"(?im)^\s*(?:from current_account|from technical evidence|from macro analysis)\s*:",
     )
     if any(re.search(pattern, text) for pattern in meta_patterns):
         raise AIRouterError(f"{provider}가 내부 분석 서두/작업 메모를 반환했습니다.")
@@ -262,7 +264,10 @@ def generate_content(prompt=None, config=None, model=None, contents=None):
     errors = []
 
     def try_openai():
-        if not OPENAI_API_KEY:
+        global _OPENAI_QUOTA_EXHAUSTED
+        if not OPENAI_API_KEY or _OPENAI_QUOTA_EXHAUSTED:
+            if _OPENAI_QUOTA_EXHAUSTED:
+                print("⏭️ OpenAI 크레딧 소진 상태가 확인되어 이번 실행에서는 OpenAI 호출을 건너뜁니다.")
             return None
         try:
             print(f"🔵 OpenAI 요청 시작: {OPENAI_MODEL} ({OPENAI_TIMEOUT_SECONDS}s)")
@@ -270,6 +275,10 @@ def generate_content(prompt=None, config=None, model=None, contents=None):
             print(f"🟢 OpenAI 사용: {OPENAI_MODEL}")
             return result
         except Exception as exc:
+            error_text = str(exc).lower()
+            if "credit_balance_exhausted" in error_text or "no credits remaining" in error_text:
+                _OPENAI_QUOTA_EXHAUSTED = True
+                print("⚠️ OpenAI 크레딧 소진 감지: 이후 역할 분석에서는 OpenAI 호출을 생략합니다.")
             errors.append(f"OpenAI={type(exc).__name__}: {exc}")
             print(f"⚠️ OpenAI 실패 → 다음 provider: {exc}")
             return None
