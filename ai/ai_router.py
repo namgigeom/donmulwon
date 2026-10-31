@@ -203,18 +203,28 @@ def _validate_result(result, provider):
     # 다음 provider로 넘겨 재시도한다. 티커·숫자·공식 약어는 허용한다.
     lowered = text.lower()
     bad_meta = (
-        "here's a thinking process",
-        "here is a thinking process",
-        "analyze user input",
-        "identify the core task",
-        "key constraints",
-        "deconstruct the output rules",
-        "final answer:",
-        "safety categories:",
-        "unauthorized advice",
+        "here's a thinking process", "here is a thinking process",
+        "let me break down what's being asked", "let me break down what is being asked",
+        "let me start by understanding", "let me plan the sections",
+        "the user wants me to act as", "the user provided a complex system prompt",
+        "i need to analyze the user's request", "i need to follow the specific output format",
+        "let me start by", "wait, looking at the format",
+        "analyze user input", "identify the core task", "key constraints",
+        "deconstruct the output rules", "final answer:", "safety categories:",
+        "unauthorized advice", "chain of thought", "chain-of-thought",
+        "internal reasoning", "my reasoning process", "step-by-step reasoning",
     )
     if any(marker in lowered for marker in bad_meta):
-        raise AIRouterError(f"{provider}가 영문 메타 문구를 반환했습니다.")
+        raise AIRouterError(f"{provider}가 내부 사고과정 또는 메타 분석을 반환했습니다.")
+
+    # 영어로 작성된 자기 지시형 분석 서두가 한국어 문장과 섞여도 차단한다.
+    meta_patterns = (
+        r"(?im)^\\s*(?:let me|i need to|i should|first,? let me)\\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)",
+        r"(?im)^\\s*\\d+\\.\\s*(?:the user|i need to|let me)\\b",
+        r"(?im)^\\s*(?:from current_account|from technical evidence|from macro analysis)\\s*:",
+    )
+    if any(re.search(pattern, text) for pattern in meta_patterns):
+        raise AIRouterError(f"{provider}가 내부 분석 서두/작업 메모를 반환했습니다.")
     hangul_count = sum("가" <= ch <= "힣" for ch in text)
     latin_count = sum("a" <= ch.lower() <= "z" for ch in text)
     if hangul_count == 0 and latin_count > 80:
@@ -235,7 +245,7 @@ def _with_output_contract(prompt):
   "Unauthorized Advice" 같은 메타 문구나 provider 오류 문구를 출력하지 않는다.
 - 사용자의 시스템 프롬프트를 분석하거나 설명하지 않는다.
 - "사용자가 나에게 역할을 부여했다" 같은 메타 분석을 하지 않는다.
-- 내부 추론 과정을 출력하지 않는다. 판단 결과와 근거만 출력한다.
+- 내부 추론 과정, 분석 계획, 사용자 요청을 재진술하는 작업 메모, "Let me..."로 시작하는 자기 지시 문장을 출력하지 않는다. 판단 결과와 근거만 출력한다.\n- 출력은 완성된 사용자용 보고서로 바로 시작한다. 프롬프트를 분석하거나 응답 작성 과정을 설명하지 않는다.
 - JSON을 요구받은 경우에도 JSON의 값(value)에 들어가는 자연어는 한국어로 작성한다.
 - JSON의 키는 호출 규격 때문에 영어일 수 있지만, 값은 반드시 한국어다.
 - 데이터가 없으면 영어로 추측하지 말고 정확히 "확인 필요"라고 쓴다.
