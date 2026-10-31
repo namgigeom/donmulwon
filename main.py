@@ -54,7 +54,7 @@ def is_safe_meeting_text(value):
         return False
     if any(marker in lowered for marker in ('"meeting_summary"', '"agent_positions"', '"transcript"', '"conflicts"', '"consensus"')):
         return False
-    if re.search(r'(?m)^\\s*"(?:meeting_summary|agent_positions|transcript|conflicts|consensus)"\\s*:', text_value):
+    if re.search(r'(?m)^\s*"(?:meeting_summary|agent_positions|transcript|conflicts|consensus)"\s*:', text_value):
         return False
     return True
 
