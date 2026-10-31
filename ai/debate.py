@@ -33,6 +33,23 @@ def _compact_json(data):
     return json.dumps(data, ensure_ascii=False, separators=(",", ":"), default=str)
 
 
+def _safe_analysis_excerpt(value, limit=320):
+    text = normalize_result(value).strip()
+    marker = "[RAW_TECHNICAL_EVIDENCE]"
+    if marker in text:
+        text = text.split(marker, 1)[0].rstrip()
+    text = text.replace("[후반부 생략]", "").replace("[분석 후반부 생략]", "")
+    if not text or text.startswith(("{", "[", "```")):
+        return ""
+    lowered = text.lower()
+    if "chart_dat" in lowered or "raw_technical_evidence" in lowered:
+        return ""
+    if text.rstrip().endswith((",", ":", "—", "-", "/", "{", "[", "...")):
+        return ""
+    compact = " ".join(text.split())
+    return compact[:limit] + ("..." if len(compact) > limit else "")
+
+
 def build_debate_prompt(question, parsed, account_data, team_results):
     """토론용 입력을 최소화하면서 4명의 원래 분석과 계좌 원본은 보존한다."""
     formatted_team = []
@@ -220,15 +237,8 @@ def run_debate(modules, parsed, account_data, team_results):
 
         # 회의 요약이 JSON 조각/영문 메타/빈 값이면 독립 분석에서 안전한 요약을 구성한다.
         if not summary or summary.lstrip().startswith(("{", "[", "```")) or "meeting_summary" in summary:
-            summary_parts = []
-            for key in AI_NAMES:
-                source = normalize_result(team_results.get(key, "")).strip()
-                if source:
-                    compact = " ".join(source.split())
-                    summary_parts.append(f"{AI_NAMES[key]}: {compact[:260]}")
-            summary = "회의 응답을 구조화하지 못해 전문 AI의 독립 분석을 보존합니다. " + (
-                " / ".join(summary_parts) if summary_parts else "확인 가능한 독립 분석이 없습니다."
-            )
+            # JSON 파싱 실패는 회의 실패다. 잘린 분석을 회의 요약으로 재포장하지 않는다.
+            summary = "회의 응답을 구조화하지 못했습니다. 검증 가능한 독립 분석만 별도로 확인해야 합니다."
             transcript = ""
 
         # 목록 필드는 실제 문자열 목록만 허용한다. 비정상 타입/JSON 문자열은 폐기한다.
@@ -240,9 +250,9 @@ def run_debate(modules, parsed, account_data, team_results):
         # AI가 agent_positions를 생략했더라도 독립 분석을 최종 입장으로 보존한다.
         for key in AI_NAMES:
             if not str(positions.get(key, "")).strip():
-                source = normalize_result(team_results.get(key, "")).strip()
+                source = _safe_analysis_excerpt(team_results.get(key, ""))
                 if source:
-                    positions[key] = source[-500:]
+                    positions[key] = source
 
         print("✅ 통합 회의 완료")
         if transcript:
@@ -269,9 +279,9 @@ def run_debate(modules, parsed, account_data, team_results):
         # 회의 API가 실패해도 독립 분석을 보존한다.
         positions = {}
         for key in AI_NAMES:
-            source = normalize_result(team_results.get(key, "")).strip()
+            source = _safe_analysis_excerpt(team_results.get(key, ""))
             if source:
-                positions[key] = source[-500:]
+                positions[key] = source
 
         return {
             "original_question": question,
