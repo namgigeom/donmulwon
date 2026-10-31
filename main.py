@@ -57,7 +57,7 @@ def is_valid_ai_result(value):
     )
     if any(marker in t for marker in invalid_markers):
         return False
-    if re.search(r"(?im)^\\s*(?:let me|i need to|i should)\\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)", value):
+    if re.search(r"(?im)^\s*(?:let me|i need to|i should)\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)", value):
         return False
     # 분석 결과가 지나치게 영어 위주인 경우도 정상 결과로 취급하지 않는다.
     hangul=sum("가" <= ch <= "힣" for ch in value)
