@@ -56,6 +56,8 @@ def is_safe_meeting_text(value):
         return False
     if "[후반부 생략]" in text_value or "[분석 후반부 생략]" in text_value:
         return False
+    if re.search(r'(?m)^\s*["\w]+["\s]*:\s*(?:\{|\[|[-0-9])', text_value):
+        return False
     if text_value.rstrip().endswith((",", ":", "—", "-", "/", "{", "[", "...")):
         return False
     if any(marker in lowered for marker in ('"meeting_summary"', '"agent_positions"', '"transcript"', '"conflicts"', '"consensus"')):
