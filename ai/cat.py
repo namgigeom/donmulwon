@@ -1297,7 +1297,7 @@ current_account.data를 우선한다.
         json_markers = ('"meeting_summary"', '"agent_positions"', '"transcript"', '"conflicts"', '"consensus"')
         if any(marker in lowered for marker in json_markers):
             return False
-        if re.search(r'(?m)^\\s*"(?:meeting_summary|agent_positions|transcript|conflicts|consensus)"\\s*:', stripped):
+        if re.search(r'(?m)^\s*"(?:meeting_summary|agent_positions|transcript|conflicts|consensus)"\s*:', stripped):
             return False
         if len(stripped) < 120:
             return False
@@ -1328,7 +1328,7 @@ current_account.data를 우선한다.
     )
     leaks_reasoning = any(marker in result.lower() for marker in reasoning_markers) or bool(
         re.search(
-            r"(?im)^\\s*(?:let me|i need to|i should)\\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)",
+            r"(?im)^\s*(?:let me|i need to|i should)\\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)",
             result,
         )
     )
@@ -1365,7 +1365,7 @@ current_account.data를 우선한다.
     retry_latin = sum("a" <= ch.lower() <= "z" for ch in result)
     retry_leak = any(marker in retry_lower for marker in reasoning_markers) or bool(
         re.search(
-            r"(?im)^\\s*(?:let me|i need to|i should)\\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)",
+            r"(?im)^\s*(?:let me|i need to|i should)\\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)",
             result,
         )
     )
