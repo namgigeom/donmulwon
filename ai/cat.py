@@ -1,6 +1,7 @@
 import os
 import json
 import glob
+import re
 from datetime import datetime
 from google.genai import types
 
@@ -1285,6 +1286,26 @@ current_account.data를 우선한다.
 
     result = str(getattr(response, "text", "") or "").strip()
 
+    # JSON 원문/회의 내부 데이터가 최종 보고서로 통과하지 못하도록 공통 검증한다.
+    def valid_final_report(text):
+        if not isinstance(text, str) or not text.strip():
+            return False
+        stripped = text.strip()
+        lowered = stripped.lower()
+        if stripped.startswith(("{", "[", "```")):
+            return False
+        json_markers = ('"meeting_summary"', '"agent_positions"', '"transcript"', '"conflicts"', '"consensus"')
+        if any(marker in lowered for marker in json_markers):
+            return False
+        if re.search(r'(?m)^\\s*"(?:meeting_summary|agent_positions|transcript|conflicts|consensus)"\\s*:', stripped):
+            return False
+        if len(stripped) < 120:
+            return False
+        # 보고서 제목 또는 판단 섹션이 전혀 없는 단편 응답은 완성본으로 취급하지 않는다.
+        if not any(marker in stripped for marker in ("최종 판단", "알프레도", "종목별", "포트폴리오", "시장 판단")):
+            return False
+        return True
+
     # 모델이 지시를 무시하고 영어 메타 분석을 반환한 경우 1회 재생성한다.
     bad_meta = (
         "here's a thinking process", "analyze user input",
@@ -1306,12 +1327,12 @@ current_account.data를 우선한다.
         "step-by-step reasoning",
     )
     leaks_reasoning = any(marker in result.lower() for marker in reasoning_markers) or bool(
-        __import__("re").search(
+        re.search(
             r"(?im)^\\s*(?:let me|i need to|i should)\\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)",
             result,
         )
     )
-    if not result or mostly_english or leaks_reasoning or any(marker in result.lower() for marker in bad_meta):
+    if not result or mostly_english or leaks_reasoning or any(marker in result.lower() for marker in bad_meta) or not valid_final_report(result):
         print("⚠️ 알프레도 출력 형식 위반 감지 → 한국어 최종결과 재요청")
         retry_prompt = prompt + """
 
@@ -1343,12 +1364,12 @@ current_account.data를 우선한다.
     retry_hangul = sum("가" <= ch <= "힣" for ch in result)
     retry_latin = sum("a" <= ch.lower() <= "z" for ch in result)
     retry_leak = any(marker in retry_lower for marker in reasoning_markers) or bool(
-        __import__("re").search(
+        re.search(
             r"(?im)^\\s*(?:let me|i need to|i should)\\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)",
             result,
         )
     )
-    if not result or (retry_hangul == 0 and retry_latin > 80) or retry_leak or any(marker in retry_lower for marker in bad_meta):
+    if not result or (retry_hangul == 0 and retry_latin > 80) or retry_leak or any(marker in retry_lower for marker in bad_meta) or not valid_final_report(result):
         raise ai_router.AIRouterError(
             "알프레도 최종 응답이 내부 사고과정/영문 메타 분석 검증을 통과하지 못했습니다."
         )
