@@ -91,6 +91,11 @@ def _openai_generate(prompt, config=None, model=None):
     except Exception as exc:
         raise AIRouterError(f"OpenAI 요청 실패: {type(exc).__name__}: {exc}")
 
+    status = str(data.get("status") or "").lower()
+    incomplete_reason = str((data.get("incomplete_details") or {}).get("reason") or "").lower()
+    if status == "incomplete" or incomplete_reason == "max_output_tokens":
+        raise AIRouterError(f"OpenAI 응답이 출력 토큰 한도에서 잘렸습니다. (reason={incomplete_reason or status})")
+
     text = data.get("output_text", "")
     if not text:
         parts = []
@@ -163,10 +168,13 @@ def _openrouter_generate(prompt, config=None, model=None):
 
     # reasoning 필드는 내부 추론일 수 있으므로 사용자에게 절대 노출하지 않는다.
     # 실제 답변 content가 비어 있으면 해당 모델 응답을 실패로 처리하고 다음 provider로 넘긴다.
+    finish_reason = str(choices[0].get("finish_reason") or "").lower()
+    if finish_reason in {"length", "max_tokens", "token_limit"}:
+        raise AIRouterError(f"OpenRouter 응답이 출력 토큰 한도에서 잘렸습니다. (model={selected_model}, finish_reason={finish_reason})")
     if not isinstance(text, str) or not text.strip():
         raise AIRouterError(
             "OpenRouter의 최종 답변 본문이 비어 있습니다. "
-            f"(model={selected_model}, provider={data.get('provider')}, finish_reason={choices[0].get('finish_reason')})"
+            f"(model={selected_model}, provider={data.get('provider')}, finish_reason={finish_reason})"
         )
 
     return SimpleNamespace(text=text.strip())
@@ -197,6 +205,11 @@ def _validate_result(result, provider):
     text = getattr(result, "text", "") if result is not None else ""
     if not isinstance(text, str) or not text.strip():
         raise AIRouterError(f"{provider} 응답 텍스트가 비어 있습니다.")
+    candidates = getattr(result, "candidates", None) or []
+    if candidates:
+        finish = str(getattr(candidates[0], "finish_reason", "") or "").upper()
+        if "MAX_TOKENS" in finish:
+            raise AIRouterError(f"{provider} 응답이 출력 토큰 한도에서 잘렸습니다.")
     if _is_provider_refusal(text):
         raise AIRouterError(f"{provider}가 분석 요청을 거부했습니다.")
 
