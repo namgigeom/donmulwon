@@ -42,6 +42,23 @@ def save_json(path,data):
     except Exception as e: print(f"⚠️ JSON 저장 실패: {type(e).__name__}: {e}"); return False
 
 
+def is_safe_meeting_text(value):
+    """회의 요약/입장에 JSON 원문이나 잘린 구조 데이터가 섞이는 것을 차단한다."""
+    if not isinstance(value, str):
+        return False
+    text_value = value.strip()
+    if not text_value:
+        return False
+    lowered = text_value.lower()
+    if text_value.startswith(("{", "[", "```")):
+        return False
+    if any(marker in lowered for marker in ('"meeting_summary"', '"agent_positions"', '"transcript"', '"conflicts"', '"consensus"')):
+        return False
+    if re.search(r'(?m)^\\s*"(?:meeting_summary|agent_positions|transcript|conflicts|consensus)"\\s*:', text_value):
+        return False
+    return True
+
+
 def is_valid_ai_result(value):
     if not isinstance(value, str) or not value.strip():
         return False
@@ -230,11 +247,13 @@ def run_meeting(parsed,modules,account_data):
 
     if not alfredo_text:
         debate_summary = normalize_result(debate_result.get("meeting_summary","")).strip()
+        if not is_safe_meeting_text(debate_summary):
+            debate_summary = "통합 회의 응답을 안전하게 정리하지 못했습니다. 아래에는 확인 가능한 전문 AI의 독립 분석만 보존합니다."
         positions = debate_result.get("final_positions", {}) or {}
         position_lines = []
         for key, label in [("crow","🐦 김선달"),("snake","🐍 이묵"),("raccoon","🦝 너부리"),("turtle","🐢 현무")]:
             value = normalize_result(positions.get(key, "")).strip()
-            if value:
+            if is_safe_meeting_text(value):
                 position_lines.append(f"- {label}: {value[:300]}")
 
         alfredo_text = (
