@@ -49,9 +49,15 @@ def is_valid_ai_result(value):
     invalid_markers=(
         "safety categories:", "unauthorized advice", "user safety:", "safety category:",
         "here's a thinking process", "analyze user input", "identify the core task",
-        "key constraints", "deconstruct the output rules", "final answer:"
+        "key constraints", "deconstruct the output rules", "final answer:",
+        "let me break down what's being asked", "let me start by understanding",
+        "let me plan the sections", "the user wants me to act as",
+        "the user provided a complex system prompt", "wait, looking at the format",
+        "chain-of-thought", "my reasoning process", "step-by-step reasoning"
     )
     if any(marker in t for marker in invalid_markers):
+        return False
+    if re.search(r"(?im)^\\s*(?:let me|i need to|i should)\\b.{0,100}(?:analy[sz]|break down|understand|plan|structure)", value):
         return False
     # 분석 결과가 지나치게 영어 위주인 경우도 정상 결과로 취급하지 않는다.
     hangul=sum("가" <= ch <= "힣" for ch in value)
