@@ -24,9 +24,9 @@ OPENROUTER_DEBATE_MODEL = os.getenv("OPENROUTER_DEBATE_MODEL", "nvidia/nemotron-
 OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "openrouter/free")
 
 # 속도 우선: 실패한 provider를 오래 붙잡지 않는다.
-GEMINI_TIMEOUT_SECONDS = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "15"))
+GEMINI_TIMEOUT_SECONDS = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "45"))
 OPENAI_TIMEOUT_SECONDS = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "45"))
-OPENROUTER_TIMEOUT_SECONDS = int(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "12"))
+OPENROUTER_TIMEOUT_SECONDS = int(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "25"))
 OPENROUTER_MAX_RETRIES = 0
 _OPENAI_QUOTA_EXHAUSTED = False
 
@@ -180,6 +180,20 @@ def _openrouter_generate(prompt, config=None, model=None):
     return SimpleNamespace(text=text.strip())
 
 
+def _compact_retry_prompt(prompt, debate=False):
+    """출력 길이 초과 시 동일 provider에 핵심 결과만 재요청한다."""
+    limit = 350 if debate else 550
+    return str(prompt) + f"""
+
+[응답 길이 초과 재요청 — 최우선]
+직전 응답이 출력 한도에서 잘렸으므로 이번에는 반드시 {limit}토큰 이내로 끝낸다.
+서론·반복·장식·긴 설명은 전부 생략하고, 요청된 핵심 항목과 근거만 짧게 작성한다.
+여러 종목이 있으면 종목별로 한 줄씩 빠짐없이 구분한다.
+출력 형식(JSON 또는 자연어)은 원래 요청을 유지하되, 마지막 문자까지 완결한다.
+데이터에 없는 내용은 만들지 말고 '확인 필요'라고 쓴다.
+"""
+
+
 def _is_provider_refusal(text):
     """AI provider의 안전/정책 거부문을 정상 분석으로 취급하지 않는다."""
     if not isinstance(text, str):
@@ -301,10 +315,20 @@ def generate_content(prompt=None, config=None, model=None, contents=None):
             return None
         try:
             print(f"⏳ Gemini 요청 시작: {model or GEMINI_MODEL} ({GEMINI_TIMEOUT_SECONDS}s)")
-            result = _validate_result(
-                _gemini_generate(prompt, config=config, model=model),
-                "Gemini",
-            )
+            try:
+                result = _validate_result(
+                    _gemini_generate(prompt, config=config, model=model),
+                    "Gemini",
+                )
+            except AIRouterError as first_error:
+                if "출력 토큰 한도" not in str(first_error):
+                    raise
+                print("↪️ Gemini 응답 길이 초과: 핵심 항목만 남긴 축약 재요청")
+                compact_prompt = _compact_retry_prompt(prompt, debate=_is_debate_prompt(prompt))
+                result = _validate_result(
+                    _gemini_generate(compact_prompt, config=config, model=model),
+                    "Gemini 축약 재요청",
+                )
             print(f"🟢 Gemini 사용: {model or GEMINI_MODEL}")
             return result
         except Exception as exc:
@@ -337,10 +361,20 @@ def generate_content(prompt=None, config=None, model=None, contents=None):
         for selected_model in models:
             try:
                 print(f"🟡 OpenRouter fallback 시작: {selected_model} ({OPENROUTER_TIMEOUT_SECONDS}s)")
-                result = _validate_result(
-                    _openrouter_generate(prompt, config=config, model=selected_model),
-                    "OpenRouter",
-                )
+                try:
+                    result = _validate_result(
+                        _openrouter_generate(prompt, config=config, model=selected_model),
+                        "OpenRouter",
+                    )
+                except AIRouterError as first_error:
+                    if "출력 토큰 한도" not in str(first_error):
+                        raise
+                    print(f"↪️ OpenRouter 길이 초과: {selected_model} 축약 재요청")
+                    compact_prompt = _compact_retry_prompt(prompt, debate=_is_debate_prompt(prompt))
+                    result = _validate_result(
+                        _openrouter_generate(compact_prompt, config=config, model=selected_model),
+                        "OpenRouter 축약 재요청",
+                    )
                 print(f"🟢 OpenRouter 사용: {selected_model}")
                 return result
             except Exception as exc:
