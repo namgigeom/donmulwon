@@ -242,10 +242,10 @@ def run_debate(modules, parsed, account_data, team_results, failed_roles=None):
         positions = data.get("agent_positions") if isinstance(data.get("agent_positions"), dict) else {}
         transcript = str(data.get("transcript") or "").strip()
         failed_speaker_patterns = {
-            "crow": r"^(?:🐦\\s*)?김선달\\s*[:：]",
-            "snake": r"^(?:🐍\\s*)?이묵\\s*[:：]",
-            "raccoon": r"^(?:🦝\\s*)?너부리\\s*[:：]",
-            "turtle": r"^(?:🐢\\s*)?현무\\s*[:：]",
+            "crow": r"^(?:🐦\s*)?김선달\s*[:：]",
+            "snake": r"^(?:🐍\s*)?이묵\s*[:：]",
+            "raccoon": r"^(?:🦝\s*)?너부리\s*[:：]",
+            "turtle": r"^(?:🐢\s*)?현무\s*[:：]",
         }
         if failed_roles and transcript:
             kept_lines = []
