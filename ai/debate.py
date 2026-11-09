@@ -53,7 +53,7 @@ def _safe_analysis_excerpt(value, limit=320):
             continue
         lines.append(candidate.lstrip("-*• ").strip())
     compact = " ".join(line for line in lines if line)
-    compact = re.sub(r"\\s+", " ", compact).strip()
+    compact = re.sub(r"\s+", " ", compact).strip()
     if not compact or compact.startswith(("{", "[", "```")):
         return ""
     lowered = compact.lower()
