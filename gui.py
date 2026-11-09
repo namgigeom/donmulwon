@@ -37,7 +37,10 @@ class AnalysisWorker(QObject):
             if isinstance(result,dict): answer=str(result.get('alfredo','') or result.get('final','') or '').strip()
             else: answer=str(result or '').strip()
             if not answer: answer='알프레도의 최종 판단이 생성되지 않았습니다.'
-            self.output.emit('[FINAL_RESULT]\n'+answer+'\n\n[MEETING_LOG]\n'+log[-16000:])
+            status=str(result.get('analysis_status','success')) if isinstance(result,dict) else 'success'
+            failed=result.get('failed_roles',{}) if isinstance(result,dict) else {}
+            failed_keys=','.join(str(key) for key in failed.keys()) if isinstance(failed,dict) else ''
+            self.output.emit(f'[ANALYSIS_STATUS:{status}]\\n[FAILED_ROLES:{failed_keys}]\\n[FINAL_RESULT]\\n'+answer+'\\n\\n[MEETING_LOG]\\n'+log[-16000:])
         except Exception:
             self.failed.emit(traceback.format_exc())
         finally:
@@ -247,13 +250,26 @@ class MainWindow(QMainWindow):
     def on_output(self,text):
         self.office.refresh_portfolio()
         if '[FINAL_RESULT]' in text:
+            status_line=next((line for line in text.splitlines() if line.startswith('[ANALYSIS_STATUS:')), '[ANALYSIS_STATUS:success]')
+            status=status_line[len('[ANALYSIS_STATUS:'):-1]
+            failed_line=next((line for line in text.splitlines() if line.startswith('[FAILED_ROLES:')), '[FAILED_ROLES:]')
+            failed_keys=set(filter(None,failed_line[len('[FAILED_ROLES:'):-1].split(',')))
             final=text.split('[FINAL_RESULT]',1)[1]
             answer=final.split('[MEETING_LOG]',1)[0].strip()
             log=final.split('[MEETING_LOG]',1)[1] if '[MEETING_LOG]' in final else ''
             self.progress.setValue(100)
-            for name in ['현무','김선달','이묵','너부리','알프레도']: self._set_team_state(name,'회의중')
-            self._set_team_state('알프레도','회의중')
-            self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.')
+            role_names={'crow':'김선달','snake':'이묵','raccoon':'너부리','turtle':'현무'}
+            for key,name in role_names.items():
+                self._set_team_state(name,'분석실패' if key in failed_keys or status == 'all_specialists_failed' else '분석완료')
+            self._set_team_state('알프레도','상태보고' if status == 'all_specialists_failed' else '검증완료')
+            if status == 'all_specialists_failed':
+                self.meeting.set_status('⚠️ 전문 AI 분석 실패','네 역할 모두 유효한 분석을 반환하지 못했습니다. 투자 판단은 생성하지 않았습니다.')
+                self.status.setText('분석 종료 · 전문 AI 전체 실패')
+            elif status == 'partial_success':
+                self.meeting.set_status('⚠️ 일부 분석 완료','성공한 전문 AI의 결과만 사용했습니다. 실패한 역할의 의견은 생성하지 않았습니다.')
+                self.status.setText('분석 종료 · 일부 전문 AI 실패')
+            else:
+                self.meeting.set_status('🐱 알프레도 · 분석완료! 회의완료!','최종 검증이 끝났습니다. 아래에 최종 판단을 정리했습니다.')
             self.office.characters.set_meeting_log(log[-16000:])
             self.office.characters.set_meeting_stage('verdict')
             self._show_result_after_verdict(answer)
