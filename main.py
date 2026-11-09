@@ -100,6 +100,36 @@ def normalize_result(result):
     except Exception:
         return str(result).replace("\x00","").replace("<unk>","")
 
+def safe_team_analysis_excerpt(value, limit=320):
+    """성공한 전문 AI의 독립 분석에서 JSON/기술 원문을 제외한 자연어 발췌를 보존한다."""
+    text_value = normalize_result(value).strip()
+    if not text_value:
+        return ""
+    marker = "[RAW_TECHNICAL_EVIDENCE]"
+    if marker in text_value:
+        text_value = text_value.split(marker, 1)[0].rstrip()
+    lines = []
+    for line in text_value.splitlines():
+        candidate = line.strip()
+        if not candidate or candidate.startswith(("```", "{", "[RAW_", "[후반", "[분석 후반")):
+            continue
+        if candidate.startswith("#") or re.fullmatch(r"[-=*_]{3,}", candidate):
+            continue
+        if candidate.startswith("[") and candidate.endswith("]"):
+            continue
+        if re.match(r'^["\\w]+["\\s]*:\\s*(?:\\{|\\[|[-0-9])', candidate):
+            continue
+        lines.append(candidate.lstrip("-*• ").strip())
+    excerpt = " ".join(line for line in lines if line)
+    excerpt = re.sub(r"\\s+", " ", excerpt).strip()
+    if not excerpt or excerpt.startswith(("{", "[", "```")):
+        return ""
+    if any(token in excerpt.lower() for token in ("chart_dat", "raw_technical_evidence", "meeting_summary", "agent_positions")):
+        return ""
+    if excerpt.endswith((",", ":", "—", "-", "/", "{", "[", "...")):
+        return ""
+    return excerpt[:limit] + ("..." if len(excerpt) > limit else "")
+
 def extract_team_voice(team_results):
     """각 전문 AI가 자기 분석에서 직접 작성한 '한마디'를 보존한다."""
     specs = [
@@ -247,7 +277,20 @@ def run_meeting(parsed,modules,account_data):
         debate_started=time.time(); debate_result=debate_module.run_debate(modules=modules,parsed=parsed,account_data=account_data,team_results=team_results,failed_roles=failed_role_details); print(f"⏱️ 통합 토론 완료 ({time.time()-debate_started:.1f}초)")
         print("[PROGRESS 80] ⚔️ 통합 회의 완료")
     except Exception as e:
-        print(f"❌ 통합 토론 오류: {type(e).__name__}: {e}"); debate_result={"initial_results":team_results,"final_positions":dict(team_results),"meeting_summary":"통합 토론이 완료되지 않아 각 전문 AI의 독립 분석을 보존합니다.","conflicts":[],"consensus":[],"important_corrections":[],"transcript":"","error":str(e)}
+        print(f"❌ 통합 토론 오류: {type(e).__name__}: {e}")
+        preserved_positions = {
+            key: safe_team_analysis_excerpt(team_results.get(key))
+            for key in ("crow", "snake", "raccoon", "turtle")
+            if key in success_roles and safe_team_analysis_excerpt(team_results.get(key))
+        }
+        debate_result = {
+            "initial_results": team_results,
+            "final_positions": preserved_positions,
+            "meeting_summary": "통합 토론 호출은 실패했습니다. 성공한 전문 AI의 독립 분석 발췌를 보존합니다.",
+            "conflicts": [], "consensus": [], "important_corrections": [],
+            "transcript": "", "error": str(e),
+            "successful_roles": success_roles, "failed_roles": failed_role_details,
+        }
     package={"request":parsed,"account_data":account_data,"team_results":team_results,"debate":debate_result,"timestamp":datetime.now().isoformat(),"analysis_status":analysis_status,"successful_roles":success_roles,"failed_roles":failed_role_details}; save_meeting_file("team_meeting",package)
     cat_result=None; cat=modules.get("cat")
     if cat is not None and callable(getattr(cat,"analyze",None)):
@@ -307,7 +350,12 @@ def run_meeting(parsed,modules,account_data):
         positions = debate_result.get("final_positions", {}) or {}
         position_lines = []
         for key, label in [("crow","🐦 김선달"),("snake","🐍 이묵"),("raccoon","🦝 너부리"),("turtle","🐢 현무")]:
+            if key not in success_roles:
+                continue
+            # 회의 결과에 입장이 없거나 안전성 검사에서 제외되면 원본 독립 분석에서 복구한다.
             value = normalize_result(positions.get(key, "")).strip()
+            if not is_safe_meeting_text(value):
+                value = safe_team_analysis_excerpt(team_results.get(key))
             if is_safe_meeting_text(value):
                 position_lines.append(f"- {label}: {value[:300]}")
 
