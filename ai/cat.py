@@ -213,7 +213,9 @@ def analyze(
     ticker=None,
     team_analyses=None,
     account_context=None,
-    debate_context=None
+    debate_context=None,
+    failed_roles=None,
+    analysis_status=None
 ):
 
     print()
@@ -301,6 +303,9 @@ def analyze(
                 }
 
 
+    failed_roles = failed_roles or {}
+    analysis_status = analysis_status or ("partial_success" if failed_roles else "success")
+
     # ========================================================
     # 전체 데이터 구성
     # ========================================================
@@ -317,6 +322,9 @@ def analyze(
             question,
 
         "debate_result": _clean_text(debate_context, 6000),
+        "analysis_status": analysis_status,
+        "successful_roles": [name for name in ("crow", "snake", "raccoon", "turtle") if name not in failed_roles and team.get(name, {}).get("content", "").strip() and not team.get(name, {}).get("content", "").startswith("분석 실패:")],
+        "failed_roles": failed_roles,
 
         "requested_ticker":
             ticker,
@@ -1177,6 +1185,7 @@ AI들의 의견이 다르다면
 🚨 기술적 분석 데이터 사용 규칙
 ==================================================
 
+이번 실행에서 성공한 전문 AI의 분석만 검증 대상으로 삼는다. source_data의 analysis_status와 failed_roles를 반드시 확인한다. 실패한 역할의 의견/발언/근거를 추측하거나, 해당 역할이 정상 분석한 것처럼 표현하지 않는다. 성공한 역할이 없으면 투자 판단을 생성하지 말고 분석 실패 상태를 보고한다.
 이번 입력에는 이묵이 작성한 기술적 분석 문장만 포함될 수 있다.
 별도의 원본 기술지표 JSON이 전달되지 않았다면 MA, RSI, MACD, ATR, OHLCV 수치를 임의로 복원하거나 추측하지 않는다.
 이묵의 분석 문장에 실제로 기재된 숫자만 인용하고, 원본 지표값의 독립 검증이 필요한 경우 '확인 필요'라고 표시한다.
