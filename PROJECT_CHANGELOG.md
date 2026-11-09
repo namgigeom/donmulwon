@@ -433,5 +433,8 @@
 
 ### 검증 상태 및 한계
 - 수정 전 최신 changelog와 현재 `main.py`, `ai/debate.py`, `ai/batch_engine.py`, `ai/cat.py`를 GitHub에서 다시 읽어 호출 흐름과 데이터 구조를 확인했다.
-- 수정 후 `main.py`와 `ai/debate.py`를 다시 fetch해 저장 내용을 확인할 예정이다.
+- 수정 후 `main.py`와 `ai/debate.py`를 다시 fetch해 발췌 복구 경로와 정규식 이스케이프를 확인했다.
+- 정규식의 공백/JSON 키 검사 패턴에 이중 이스케이프가 남지 않도록 후속 보정했다.
+- `main.py` 정규식 보정 커밋: `c83c9207847ab0767edd347f7c8ca7341e4964a9`
+- `ai/debate.py` 정규식 보정 커밋: `5341e3231d19a409b191b2ed797d44744fca7a36`
 - 실제 Python 컴파일, 자동 테스트, provider API 호출 및 GUI 실행은 아직 수행하지 않았다. 따라서 런타임 동작이나 회의/알프레도 API 성공을 보장하지 않는다.
