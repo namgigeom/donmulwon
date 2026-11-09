@@ -248,7 +248,7 @@ def run_meeting(parsed,modules,account_data):
         print("[PROGRESS 80] ⚔️ 통합 회의 완료")
     except Exception as e:
         print(f"❌ 통합 토론 오류: {type(e).__name__}: {e}"); debate_result={"initial_results":team_results,"final_positions":dict(team_results),"meeting_summary":"통합 토론이 완료되지 않아 각 전문 AI의 독립 분석을 보존합니다.","conflicts":[],"consensus":[],"important_corrections":[],"transcript":"","error":str(e)}
-    package={"request":parsed,"account_data":account_data,"team_results":team_results,"debate":debate_result,"timestamp":datetime.now().isoformat()}; save_meeting_file("team_meeting",package)
+    package={"request":parsed,"account_data":account_data,"team_results":team_results,"debate":debate_result,"timestamp":datetime.now().isoformat(),"analysis_status":analysis_status,"successful_roles":success_roles,"failed_roles":failed_role_details}; save_meeting_file("team_meeting",package)
     cat_result=None; cat=modules.get("cat")
     if cat is not None and callable(getattr(cat,"analyze",None)):
         set_gui_state("verdict"); print("[PROGRESS 85] 🐱 알프레도 최종 검증 시작")
