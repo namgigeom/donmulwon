@@ -35,21 +35,33 @@ def _compact_json(data):
 
 
 def _safe_analysis_excerpt(value, limit=320):
+    """성공한 전문 AI의 독립 분석에서 구조 데이터가 아닌 자연어 발췌를 보존한다."""
     text = normalize_result(value).strip()
     marker = "[RAW_TECHNICAL_EVIDENCE]"
     if marker in text:
         text = text.split(marker, 1)[0].rstrip()
-    text = text.replace("[후반부 생략]", "").replace("[분석 후반부 생략]", "")
-    if not text or text.startswith(("{", "[", "```")):
+    lines = []
+    for line in text.splitlines():
+        candidate = line.strip()
+        if not candidate or candidate.startswith(("```", "{", "[RAW_", "[후반", "[분석 후반")):
+            continue
+        if candidate.startswith("#") or re.fullmatch(r"[-=*_]{3,}", candidate):
+            continue
+        if candidate.startswith("[") and candidate.endswith("]"):
+            continue
+        if re.match(r'^["\\w]+["\\s]*:\\s*(?:\\{|\\[|[-0-9])', candidate):
+            continue
+        lines.append(candidate.lstrip("-*• ").strip())
+    compact = " ".join(line for line in lines if line)
+    compact = re.sub(r"\\s+", " ", compact).strip()
+    if not compact or compact.startswith(("{", "[", "```")):
         return ""
-    lowered = text.lower()
-    if "chart_dat" in lowered or "raw_technical_evidence" in lowered:
+    lowered = compact.lower()
+    if any(token in lowered for token in ("chart_dat", "raw_technical_evidence", "meeting_summary", "agent_positions")):
         return ""
-    if text.rstrip().endswith((",", ":", "—", "-", "/", "{", "[", "...")):
+    if compact.endswith((",", ":", "—", "-", "/", "{", "[", "...")):
         return ""
-    compact = " ".join(text.split())
     return compact[:limit] + ("..." if len(compact) > limit else "")
-
 
 def build_debate_prompt(question, parsed, account_data, team_results, failed_roles=None):
     """성공한 전문 분석만 회의에 포함하고 실패 역할은 상태만 알린다."""
