@@ -121,7 +121,7 @@ def safe_team_analysis_excerpt(value, limit=320):
             continue
         lines.append(candidate.lstrip("-*• ").strip())
     excerpt = " ".join(line for line in lines if line)
-    excerpt = re.sub(r"\\s+", " ", excerpt).strip()
+    excerpt = re.sub(r"\s+", " ", excerpt).strip()
     if not excerpt or excerpt.startswith(("{", "[", "```")):
         return ""
     if any(token in excerpt.lower() for token in ("chart_dat", "raw_technical_evidence", "meeting_summary", "agent_positions")):
