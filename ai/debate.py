@@ -1,4 +1,5 @@
 import json
+import re
 
 from google.genai import types
 from ai import ai_router
@@ -240,6 +241,20 @@ def run_debate(modules, parsed, account_data, team_results, failed_roles=None):
 
         positions = data.get("agent_positions") if isinstance(data.get("agent_positions"), dict) else {}
         transcript = str(data.get("transcript") or "").strip()
+        failed_speaker_patterns = {
+            "crow": r"^(?:🐦\\s*)?김선달\\s*[:：]",
+            "snake": r"^(?:🐍\\s*)?이묵\\s*[:：]",
+            "raccoon": r"^(?:🦝\\s*)?너부리\\s*[:：]",
+            "turtle": r"^(?:🐢\\s*)?현무\\s*[:：]",
+        }
+        if failed_roles and transcript:
+            kept_lines = []
+            for line in transcript.splitlines():
+                stripped_line = line.strip()
+                if any(key in failed_roles and re.match(pattern, stripped_line) for key, pattern in failed_speaker_patterns.items()):
+                    continue
+                kept_lines.append(line)
+            transcript = "\\n".join(kept_lines).strip()
         summary = str(data.get("meeting_summary") or "").strip()
 
         # 회의 요약이 JSON 조각/영문 메타/빈 값이면 독립 분석에서 안전한 요약을 구성한다.
