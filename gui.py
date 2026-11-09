@@ -40,7 +40,7 @@ class AnalysisWorker(QObject):
             status=str(result.get('analysis_status','success')) if isinstance(result,dict) else 'success'
             failed=result.get('failed_roles',{}) if isinstance(result,dict) else {}
             failed_keys=','.join(str(key) for key in failed.keys()) if isinstance(failed,dict) else ''
-            self.output.emit(f'[ANALYSIS_STATUS:{status}]\\n[FAILED_ROLES:{failed_keys}]\\n[FINAL_RESULT]\\n'+answer+'\\n\\n[MEETING_LOG]\\n'+log[-16000:])
+            self.output.emit(f'[ANALYSIS_STATUS:{status}]\n[FAILED_ROLES:{failed_keys}]\n[FINAL_RESULT]\n'+answer+'\n\n[MEETING_LOG]\n'+log[-16000:])
         except Exception:
             self.failed.emit(traceback.format_exc())
         finally:
