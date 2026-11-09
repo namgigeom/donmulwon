@@ -134,7 +134,7 @@ def _openrouter_generate(prompt, config=None, model=None):
         if temperature is not None:
             payload["temperature"] = temperature
         if max_output_tokens is not None:
-            payload["max_tokens"] = min(int(max_output_tokens), 1000 if _is_debate_prompt(prompt) else 1200)
+            payload["max_tokens"] = min(int(max_output_tokens), 1800 if _is_debate_prompt(prompt) else 2800)
 
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
@@ -328,6 +328,16 @@ def generate_content(prompt=None, config=None, model=None, contents=None):
                 result = _validate_result(
                     _gemini_generate(compact_prompt, config=config, model=model),
                     "Gemini 축약 재요청",
+                )
+            except Exception as first_error:
+                transient = any(code in str(first_error).upper() for code in ("503", "504", "UNAVAILABLE", "DEADLINE_EXCEEDED", "RESOURCE_EXHAUSTED"))
+                if not transient:
+                    raise
+                print("↪️ Gemini 일시 오류 감지: 3초 대기 후 동일 요청 1회 재시도")
+                time.sleep(3)
+                result = _validate_result(
+                    _gemini_generate(prompt, config=config, model=model),
+                    "Gemini 재시도",
                 )
             print(f"🟢 Gemini 사용: {model or GEMINI_MODEL}")
             return result
