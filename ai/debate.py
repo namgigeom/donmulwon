@@ -50,22 +50,27 @@ def _safe_analysis_excerpt(value, limit=320):
     return compact[:limit] + ("..." if len(compact) > limit else "")
 
 
-def build_debate_prompt(question, parsed, account_data, team_results):
-    """토론용 입력을 최소화하면서 4명의 원래 분석과 계좌 원본은 보존한다."""
+def build_debate_prompt(question, parsed, account_data, team_results, failed_roles=None):
+    """성공한 전문 분석만 회의에 포함하고 실패 역할은 상태만 알린다."""
+    failed_roles = failed_roles or {}
     formatted_team = []
     for key, name in AI_NAMES.items():
-        result = normalize_result(team_results.get(key, ""))
-        # 비정상적으로 긴 로그가 토론 입력을 폭증시키는 것을 방지한다.
+        value = team_results.get(key)
+        if key in failed_roles or not isinstance(value, str) or not value.strip():
+            detail = failed_roles.get(key, "유효한 분석 결과 없음")
+            formatted_team.append(f"[{name} · 분석 실패]\n분석 실패: {detail}")
+            continue
+        result = normalize_result(value)
         if len(result) > 6000:
             result = result[:6000] + "\n[분석 후반부 생략]"
-        formatted_team.append(f"[{name}]\n{result}")
+        formatted_team.append(f"[{name} · 분석 성공]\n{result}")
 
     team_text = "\n\n".join(formatted_team)
     account_text = _compact_json(account_data)
     parsed_text = _compact_json(parsed)
 
     return f"""너는 🏦 돈물원 AI 투자팀의 공식 회의 진행 AI다.
-이미 완료된 4명의 독립 분석을 가지고 실제 투자회의를 진행한다.
+성공한 역할의 독립 분석만 가지고 실제 투자회의를 진행한다. 실패한 역할은 분석 실패 상태이며 의견이나 발언을 만들지 않는다.
 새로운 시장 데이터를 수집하거나 전문 AI를 다시 호출하지 마라.
 
 [사용자 질문]
@@ -77,7 +82,7 @@ def build_debate_prompt(question, parsed, account_data, team_results):
 [현재 계좌 원본]
 {account_text}
 
-[4명 독립 분석]
+[전문 AI 실행 결과 — 성공/실패 상태를 반드시 구분]
 {team_text}
 
 [전문 역할]
@@ -188,7 +193,7 @@ JSON 하나만 반환:
 }}"""
 
 
-def run_debate(modules, parsed, account_data, team_results):
+def run_debate(modules, parsed, account_data, team_results, failed_roles=None):
     """
     4명의 독립 분석을 이미 확보한 뒤, 회의는 AI 1회 호출로 통합한다.
     기존의 4회 순차 호출은 실패 지점이 많고 느렸으며,
@@ -200,11 +205,13 @@ def run_debate(modules, parsed, account_data, team_results):
     print("                 ⚔️ 실제 투자회의")
     print("=" * 70)
 
+    failed_roles = failed_roles or {}
     prompt = build_debate_prompt(
         question=question,
         parsed=parsed,
         account_data=account_data,
         team_results=team_results,
+        failed_roles=failed_roles,
     )
 
     config = types.GenerateContentConfig(
@@ -249,6 +256,9 @@ def run_debate(modules, parsed, account_data, team_results):
 
         # AI가 agent_positions를 생략했더라도 독립 분석을 최종 입장으로 보존한다.
         for key in AI_NAMES:
+            if key in failed_roles:
+                positions.pop(key, None)
+                continue
             if not str(positions.get(key, "")).strip():
                 source = _safe_analysis_excerpt(team_results.get(key, ""))
                 if source:
@@ -271,6 +281,8 @@ def run_debate(modules, parsed, account_data, team_results):
             "consensus": safe_list(data.get("consensus")),
             "important_corrections": safe_list(data.get("important_corrections")),
             "transcript": transcript,
+            "successful_roles": [key for key in AI_NAMES if key not in failed_roles and isinstance(team_results.get(key), str) and team_results.get(key).strip()],
+            "failed_roles": failed_roles,
         }
 
     except Exception as e:
@@ -279,6 +291,8 @@ def run_debate(modules, parsed, account_data, team_results):
         # 회의 API가 실패해도 독립 분석을 보존한다.
         positions = {}
         for key in AI_NAMES:
+            if key in failed_roles:
+                continue
             source = _safe_analysis_excerpt(team_results.get(key, ""))
             if source:
                 positions[key] = source
@@ -294,5 +308,7 @@ def run_debate(modules, parsed, account_data, team_results):
             "important_corrections": [],
             "transcript": "",
             "error": str(e),
+            "successful_roles": [key for key in AI_NAMES if key not in failed_roles and isinstance(team_results.get(key), str) and team_results.get(key).strip()],
+            "failed_roles": failed_roles,
         }
 
