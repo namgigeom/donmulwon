@@ -194,9 +194,10 @@ def run_meeting(parsed,modules,account_data):
         for key in failed_roles:
             detail = getattr(run_team_batches, "last_errors", {}).get(key, "원인 미상")
             print(f"   - {role_labels[key]}: {detail}")
+    failed_role_details = {key: getattr(run_team_batches, "last_errors", {}).get(key, "응답 없음") for key in failed_roles}
+    analysis_status = "partial_success" if failed_roles else "success"
     if not success_roles:
-        set_gui_state("return")
-        details = getattr(run_team_batches, "last_errors", {}) or {}
+        details = failed_role_details
         failure_lines = [
             f"- {role_labels[key]}: {details.get(key, '응답 없음')}"
             for key in ("crow", "snake", "raccoon", "turtle")
@@ -232,6 +233,7 @@ def run_meeting(parsed,modules,account_data):
             "timestamp": datetime.now().isoformat(),
             "alfredo": safe_report,
             "analysis_status": "all_specialists_failed",
+            "successful_roles": [],
             "failed_roles": details,
         }
         save_meeting_file("final_meeting", package)
@@ -242,7 +244,7 @@ def run_meeting(parsed,modules,account_data):
     print("[PROGRESS 65] ⚔️ 통합 회의 시작")
     try:
         debate_module=importlib.import_module("ai.debate"); print("\n⚔️ 4인 통합 토론 시작 (1회)")
-        debate_started=time.time(); debate_result=debate_module.run_debate(modules=modules,parsed=parsed,account_data=account_data,team_results=team_results); print(f"⏱️ 통합 토론 완료 ({time.time()-debate_started:.1f}초)")
+        debate_started=time.time(); debate_result=debate_module.run_debate(modules=modules,parsed=parsed,account_data=account_data,team_results=team_results,failed_roles=failed_role_details); print(f"⏱️ 통합 토론 완료 ({time.time()-debate_started:.1f}초)")
         print("[PROGRESS 80] ⚔️ 통합 회의 완료")
     except Exception as e:
         print(f"❌ 통합 토론 오류: {type(e).__name__}: {e}"); debate_result={"initial_results":team_results,"final_positions":dict(team_results),"meeting_summary":"통합 토론이 완료되지 않아 각 전문 AI의 독립 분석을 보존합니다.","conflicts":[],"consensus":[],"important_corrections":[],"transcript":"","error":str(e)}
@@ -251,7 +253,16 @@ def run_meeting(parsed,modules,account_data):
     if cat is not None and callable(getattr(cat,"analyze",None)):
         set_gui_state("verdict"); print("[PROGRESS 85] 🐱 알프레도 최종 검증 시작")
         print("\n🐱 알프레도 최종 검증 시작 (1회)"); ticker_label=", ".join(tickers) if tickers else "전체 시장 / 포트폴리오"; cat_filename_label=re.sub(r'[<>:"/\\|?*]','_',ticker_label).strip(" .") or "MARKET"
+        failed_role_text = "\n".join(f"- {role_labels[key]}: 분석 실패 ({detail})" for key, detail in failed_role_details.items()) or "- 실패한 역할 없음"
+        success_role_text = ", ".join(role_labels[key] for key in success_roles) or "없음"
         instruction=f"""
+[전문 AI 실행 상태]
+성공한 역할: {success_role_text}
+실패한 역할 및 오류:
+{failed_role_text}
+현재 실행 상태: {analysis_status}
+성공한 역할의 분석만 근거로 사용한다. 실패한 역할의 의견/발언/판단은 절대 만들어내지 않는다.
+
 [최종 사용자 화면 출력 규칙]
 너는 돈물원 트레이딩 팀의 최종 팀장이다.
 현재 계좌 원본, 성공한 전문 AI 분석 및 통합 토론만 교차검증한다. 실패한 역할은 분석하지 못했다고 명시하고 의견을 추측하거나 네 명 모두 분석한 것처럼 표현하지 않는다. 사용자에게는 긴 연구보고서를 출력하지 않는다.
@@ -262,17 +273,17 @@ def run_meeting(parsed,modules,account_data):
 가격 근거가 부족하면 숫자를 만들지 말고 '확인 필요'라고 한다.
 최종 답변은 1) 알프레도 판단 2) 종목별 행동+현재가 3) 종목별 핵심 기준 가격 4) 핵심 이유 2~4개 5) 실제 성공한 AI의 핵심 의견만 1줄씩 순서로 압축한다. 실패한 AI는 실패했다고 표시한다.
 """
-        team_for_cat={key:{"file":None,"content":normalize_result(value)} for key,value in team_results.items()}
+        team_for_cat={key:{"file":None,"content":normalize_result(team_results.get(key)) if key in success_roles else f"분석 실패: {failed_role_details.get(key, '응답 없음')}"} for key in ("crow", "snake", "raccoon", "turtle")}
         try:
             cat_started=time.time()
-            cat_result=cat.analyze(question=parsed["question"]+"\n\n"+instruction,ticker=cat_filename_label,team_analyses=team_for_cat,account_context=account_data,debate_context=debate_result)
+            cat_result=cat.analyze(question=parsed["question"]+"\n\n"+instruction,ticker=cat_filename_label,team_analyses=team_for_cat,account_context=account_data,debate_context=debate_result,failed_roles=failed_role_details,analysis_status=analysis_status)
             cat_result=normalize_result(cat_result).strip()
             # Gemini/Router가 빈 text를 반환하는 경우 GUI가 "최종 판단 없음"으로
             # 끝나지 않도록 한 번만 재요청한다. 기존 분석 데이터는 그대로 사용한다.
             if not cat_result:
                 print("⚠️ 알프레도 응답 본문이 비어 있어 최종 검증을 1회 재시도합니다.")
                 retry_instruction=instruction+"\\n\\n[재시도 규칙] 반드시 빈 응답을 반환하지 말고 최종 판단을 일반 텍스트로 작성한다. 데이터가 부족한 항목은 '확인 필요'라고 명시한다."
-                cat_result=cat.analyze(question=parsed["question"]+"\\n\\n"+retry_instruction,ticker=cat_filename_label,team_analyses=team_for_cat,account_context=account_data,debate_context=debate_result)
+                cat_result=cat.analyze(question=parsed["question"]+"\\n\\n"+retry_instruction,ticker=cat_filename_label,team_analyses=team_for_cat,account_context=account_data,debate_context=debate_result,failed_roles=failed_role_details,analysis_status=analysis_status)
                 cat_result=normalize_result(cat_result).strip()
             print(f"⏱️ 알프레도 검증 완료 ({time.time()-cat_started:.1f}초)")
             print("[PROGRESS 95] 🐱 알프레도 검증 완료")
@@ -314,7 +325,7 @@ def run_meeting(parsed,modules,account_data):
         )
 
     # 전문 AI 한마디는 최종 판단과 분리해 회의 로그에서만 사용한다.
-    final_data={**package,"alfredo":alfredo_text}; final_path=save_meeting_file("final_meeting",final_data)
+    final_data={**package,"alfredo":alfredo_text,"analysis_status":analysis_status,"successful_roles":success_roles,"failed_roles":failed_role_details}; final_path=save_meeting_file("final_meeting",final_data)
     print("\n"+"━"*70); print("🐱 알프레도 최종 판단"); print("━"*70); print(alfredo_text); print("━"*70); print(f"💾 최종 회의록: {final_path}")
     print("[PROGRESS 100] 분석 파이프라인 완료")
     set_gui_state("return")
